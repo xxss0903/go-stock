@@ -375,6 +375,14 @@ onBeforeMount(() => {
       message.info("AI分析完成！")
       message.destroyAll()
     } else {
+      // 检查是否是错误消息 (code === 0 表示错误)
+      if (msg.code === 0 && msg.content) {
+        // 显示错误提示
+        message.error("AI分析出错，请查看下方错误信息")
+        // 确保错误内容被添加到结果中
+        data.airesult = data.airesult + "\n\n" + msg.content
+        return
+      }
       if (msg.chatId) {
         data.chatId = msg.chatId
       }
@@ -2033,6 +2041,9 @@ function searchStockReport(stockCode) {
                 <n-button size="tiny" type="error" v-if="result['买一报价']>0"
                           @click="showMoney(result['股票代码'],result['股票名称'])"> 资金
                 </n-button>
+                <n-button size="tiny" v-if="data.openAiEnable" type="warning" secondary
+                          @click="aiCheckStock(result['股票名称'],result['股票代码'])"> AI分析
+                </n-button>
                 <n-button size="tiny" type="success" @click="search(result['股票代码'],result['股票名称'])"> 详情
                 </n-button>
                 <n-button v-if="result['买一报价']>0" size="tiny" type="success"
@@ -2178,6 +2189,9 @@ function searchStockReport(stockCode) {
                 <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])"> 日K</n-button>
                 <n-button size="tiny" type="error" v-if="result['买一报价']>0"
                           @click="showMoney(result['股票代码'],result['股票名称'])"> 资金
+                </n-button>
+                <n-button size="tiny" v-if="data.openAiEnable" type="warning" secondary
+                          @click="aiCheckStock(result['股票名称'],result['股票代码'])"> AI分析
                 </n-button>
                 <n-button size="tiny" type="success" @click="search(result['股票代码'],result['股票名称'])"> 详情
                 </n-button>

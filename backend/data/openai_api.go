@@ -963,6 +963,46 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 	return ch
 }
 
+// translateErrorMessage 将英文错误消息转换为友好的中文提示
+func translateErrorMessage(errMsg string) string {
+	errMsg = strings.ToLower(errMsg)
+	if strings.Contains(errMsg, "insufficient balance") {
+		return "❌ **DeepSeek API 余额不足**\n\n" +
+			"您的 DeepSeek 账户余额不足，无法继续使用 AI 分析功能。\n\n" +
+			"**解决方案：**\n" +
+			"1. 登录 [DeepSeek 控制台](https://platform.deepseek.com/) 查看账户余额\n" +
+			"2. 充值账户余额以继续使用服务\n" +
+			"3. 或者切换到其他已配置的 AI 服务（在设置中可配置多个 AI 服务）\n\n" +
+			"如需帮助，请查看设置页面中的 AI 配置选项。"
+	}
+	if strings.Contains(errMsg, "invalid api key") || strings.Contains(errMsg, "unauthorized") {
+		return "❌ **API 密钥无效**\n\n" +
+			"当前配置的 API 密钥无效或已过期。\n\n" +
+			"**解决方案：**\n" +
+			"1. 检查设置中的 API 密钥是否正确\n" +
+			"2. 确认 API 密钥是否已过期\n" +
+			"3. 重新生成并更新 API 密钥"
+	}
+	if strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "too many requests") {
+		return "❌ **请求频率过高**\n\n" +
+			"API 请求频率超过限制，请稍后再试。\n\n" +
+			"**解决方案：**\n" +
+			"1. 等待一段时间后重试\n" +
+			"2. 减少请求频率\n" +
+			"3. 检查是否达到 API 调用次数限制"
+	}
+	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "context deadline exceeded") {
+		return "❌ **请求超时**\n\n" +
+			"AI 分析请求超时，可能是网络问题或服务响应较慢。\n\n" +
+			"**解决方案：**\n" +
+			"1. 检查网络连接\n" +
+			"2. 在设置中增加超时时间（Timeout）\n" +
+			"3. 稍后重试"
+	}
+	// 如果无法识别，返回原始错误消息
+	return errMsg
+}
+
 func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[string]any, question string, think bool) {
 	client := resty.New()
 	client.SetBaseURL(strutil.Trim(o.BaseUrl))
@@ -993,20 +1033,20 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 
 	body := resp.RawBody()
 	defer body.Close()
-	if err != nil {
-		logger.SugaredLogger.Infof("Stream error : %s", err.Error())
-		//ch <- err.Error()
-		ch <- map[string]any{
-			"code":     0,
-			"question": question,
-			"content":  err.Error(),
+		if err != nil {
+			logger.SugaredLogger.Infof("Stream error : %s", err.Error())
+			//ch <- err.Error()
+			ch <- map[string]any{
+				"code":     0,
+				"question": question,
+				"content":  translateErrorMessage(err.Error()),
+			}
+			return
 		}
-		return
-	}
-	//location, _ := time.LoadLocation("Asia/Shanghai")
+		//location, _ := time.LoadLocation("Asia/Shanghai")
 
-	scanner := bufio.NewScanner(body)
-	for scanner.Scan() {
+		scanner := bufio.NewScanner(body)
+		for scanner.Scan() {
 		line := scanner.Text()
 		logger.SugaredLogger.Infof("Received data: %s", line)
 		if strings.HasPrefix(line, "data:") {
@@ -1077,7 +1117,7 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
-						"content":  err.Error(),
+						"content":  translateErrorMessage(err.Error()),
 					}
 				} else {
 					logger.SugaredLogger.Infof("Stream data error : %s", data)
@@ -1085,7 +1125,7 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
-						"content":  data,
+						"content":  translateErrorMessage(data),
 					}
 				}
 			}
@@ -1102,7 +1142,7 @@ func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
-						"content":  msg,
+						"content":  translateErrorMessage(msg),
 					}
 				}
 			}
@@ -1153,7 +1193,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 		ch <- map[string]any{
 			"code":     0,
 			"question": question,
-			"content":  err.Error(),
+			"content":  translateErrorMessage(err.Error()),
 		}
 		return
 	}
@@ -1735,7 +1775,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
-						"content":  err.Error(),
+						"content":  translateErrorMessage(err.Error()),
 					}
 				} else {
 					logger.SugaredLogger.Infof("Stream data error : %s", data)
@@ -1743,7 +1783,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 					ch <- map[string]any{
 						"code":     0,
 						"question": question,
-						"content":  data,
+						"content":  translateErrorMessage(data),
 					}
 				}
 			}
@@ -1774,7 +1814,7 @@ func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch 
 						ch <- map[string]any{
 							"code":     0,
 							"question": question,
-							"content":  msg,
+							"content":  translateErrorMessage(msg),
 						}
 					}
 

@@ -272,6 +272,14 @@ EventsOn("summaryStockNews", async (msg) => {
     message.destroyAll()
 
   } else {
+    // 检查是否是错误消息 (code === 0 表示错误)
+    if (msg.code === 0 && msg.content) {
+      // 显示错误提示
+      message.error("AI分析出错，请查看下方错误信息")
+      // 确保错误内容被添加到结果中
+      aiSummary.value = aiSummary.value + "\n\n" + msg.content
+      return
+    }
     if (msg.chatId) {
       chatId.value = msg.chatId
     }
