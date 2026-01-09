@@ -4,7 +4,6 @@ import * as echarts from 'echarts';
 import {
   AddGroup,
   AddStockGroup,
-  ChatWithAgent,
   Follow,
   GetAiConfigs,
   GetAIResponseResult,
@@ -38,20 +37,11 @@ import {
 import {
   NAvatar,
   NButton,
-  NDivider,
   NDropdown,
   NFlex,
   NForm,
   NFormItem,
-  NInput,
   NInputNumber,
-  NModal,
-  NRadio,
-  NRadioGroup,
-  NSelect,
-  NSpin,
-  NSwitch,
-  NTag,
   NText,
   useDialog,
   useMessage,
@@ -106,7 +96,6 @@ const enableEditor = ref(false)
 const mdPreviewRef = ref(null)
 const mdEditorRef = ref(null)
 const tipsRef = ref(null)
-const aiFilterPreviewRef = ref(null) // AI筛选结果预览引用
 const message = useMessage()
 const notify = useNotification()
 const stocks = ref([])
@@ -120,7 +109,6 @@ const modalShow2 = ref(false)
 const modalShow3 = ref(false)
 const modalShow4 = ref(false)
 const modalShow5 = ref(false)
-const modalShow6 = ref(false) // AI条件过滤选股
 const addBTN = ref(true)
 const enableTools = ref(false)
 const thinkingMode = ref(false)
@@ -253,7 +241,7 @@ function handleTabDrop(event) {
   });
 
   if (dragSourceIndex.value !== null && dragTargetIndex.value !== null &&
-      dragSourceIndex.value !== dragTargetIndex.value) {
+    dragSourceIndex.value !== dragTargetIndex.value) {
 
     // 确保索引有效（排除"全部"选项卡）
     if (dragSourceIndex.value > 0 && dragTargetIndex.value > 0) {
@@ -438,11 +426,11 @@ onBeforeMount(() => {
 
     notify.info({
       avatar: () =>
-          h(NAvatar, {
-            size: 'small',
-            round: false,
-            src: icon.value
-          }),
+        h(NAvatar, {
+          size: 'small',
+          round: false,
+          src: icon.value
+        }),
       title: '发现新版本: ' + msg.tag_name,
       content: () => {
         //return h(MdPreview, {theme:'dark',modelValue:msg.commit?.message}, null)
@@ -478,11 +466,11 @@ onBeforeMount(() => {
   EventsOn("warnMsg", async (msg) => {
     notify.error({
       avatar: () =>
-          h(NAvatar, {
-            size: 'small',
-            round: false,
-            src: icon.value
-          }),
+        h(NAvatar, {
+          size: 'small',
+          round: false,
+          src: icon.value
+        }),
       title: '警告',
       duration: 5000,
       content: () => {
@@ -635,7 +623,7 @@ function isTradingTime() {
     const startAfternoon = 13 * 60; // 下午13点换算成分钟数
     const endAfternoon = 15 * 60; // 下午15点换算成分钟数
     if ((totalMinutes >= startMorning && totalMinutes < endMorning) ||
-        (totalMinutes >= startAfternoon && totalMinutes < endAfternoon)) {
+      (totalMinutes >= startAfternoon && totalMinutes < endAfternoon)) {
       return true;
     }
   }
@@ -798,9 +786,9 @@ async function updateData(result) {
 
   // result.key=result.sort
   results.value = Object.fromEntries(
-      Object.entries(results.value).filter(
-          ([key]) => !key.includes(result["股票代码"])
-      ));
+    Object.entries(results.value).filter(
+      ([key]) => !key.includes(result["股票代码"])
+    ));
 
   result.key = GetSortKey(result.sort, result["股票代码"])
   results.value[result.key] = result
@@ -845,9 +833,9 @@ function openCenteredWindow(url, width, height) {
     switch (env.platform) {
       case 'windows':
         window.open(
-            url,
-            'centeredWindow',
-            `width=${width},height=${height},left=${left},top=${top},location=no,menubar=no,toolbar=no,display=standalone`
+          url,
+          'centeredWindow',
+          `width=${width},height=${height},left=${left},top=${top},location=no,menubar=no,toolbar=no,display=standalone`
         )
         break
       default :
@@ -1228,15 +1216,15 @@ function handleKLine() {
           let currentItemData = params.data;
 
           return params.name + '<br>' +
-              '开盘:' + currentItemData[1] + '<br>' +
-              '收盘:' + currentItemData[2] + '<br>' +
-              '最低:' + currentItemData[3] + '<br>' +
-              '最高:' + currentItemData[4] + '<br>' +
-              '成交量(万手):' + volum[1] + '<br>' +
-              'MA5日均线:' + ma5 + '<br>' +
-              'MA10日均线:' + ma10 + '<br>' +
-              'MA20日均线:' + ma20 + '<br>' +
-              'MA30日均线:' + ma30
+            '开盘:' + currentItemData[1] + '<br>' +
+            '收盘:' + currentItemData[2] + '<br>' +
+            '最低:' + currentItemData[3] + '<br>' +
+            '最高:' + currentItemData[4] + '<br>' +
+            '成交量(万手):' + volum[1] + '<br>' +
+            'MA5日均线:' + ma5 + '<br>' +
+            'MA10日均线:' + ma10 + '<br>' +
+            'MA20日均线:' + ma20 + '<br>' +
+            'MA30日均线:' + ma30
         }
         // position: function (pos, params, el, elRect, size) {
         //   const obj = {
@@ -1588,28 +1576,28 @@ function SendMessage(result, type) {
   let typeName = getTypeName(type)
   let img = 'http://image.sinajs.cn/newchart/min/n/' + result["股票代码"] + '.gif' + "?t=" + Date.now()
   let markdown = "### go-stock [" + typeName + "]\n\n" +
-      "### " + result["股票名称"] + "(" + result["股票代码"] + ")\n" +
-      "- 当前价格: " + result["当前价格"] + "  " + result.changePercent + "%\n" +
-      "- 最高价: " + result["今日最高价"] + "  " + result.highRate + "\n" +
-      "- 最低价: " + result["今日最低价"] + "  " + result.lowRate + "\n" +
-      "- 昨收价: " + result["昨日收盘价"] + "\n" +
-      "- 今开价: " + result["今日开盘价"] + "\n" +
-      "- 成本价: " + result.costPrice + "  " + result.profit + "%  " + result.profitAmount + " ¥\n" +
-      "- 成本数量: " + result.costVolume + "股\n" +
-      "- 日期: " + result["日期"] + "  " + result["时间"] + "\n\n" +
-      "![image](" + img + ")\n"
+    "### " + result["股票名称"] + "(" + result["股票代码"] + ")\n" +
+    "- 当前价格: " + result["当前价格"] + "  " + result.changePercent + "%\n" +
+    "- 最高价: " + result["今日最高价"] + "  " + result.highRate + "\n" +
+    "- 最低价: " + result["今日最低价"] + "  " + result.lowRate + "\n" +
+    "- 昨收价: " + result["昨日收盘价"] + "\n" +
+    "- 今开价: " + result["今日开盘价"] + "\n" +
+    "- 成本价: " + result.costPrice + "  " + result.profit + "%  " + result.profitAmount + " ¥\n" +
+    "- 成本数量: " + result.costVolume + "股\n" +
+    "- 日期: " + result["日期"] + "  " + result["时间"] + "\n\n" +
+    "![image](" + img + ")\n"
   let title = result["股票名称"] + "(" + result["股票代码"] + ") " + result["当前价格"] + " " + result.changePercent
 
   let msg = '{' +
-      '     "msgtype": "markdown",' +
-      '     "markdown": {' +
-      '         "title":"[' + typeName + "]" + title + '",' +
-      '         "text": "' + markdown + '"' +
-      '     },' +
-      '      "at": {' +
-      '          "isAtAll": true' +
-      '      }' +
-      ' }'
+    '     "msgtype": "markdown",' +
+    '     "markdown": {' +
+    '         "title":"[' + typeName + "]" + title + '",' +
+    '         "text": "' + markdown + '"' +
+    '     },' +
+    '      "at": {' +
+    '          "isAtAll": true' +
+    '      }' +
+    ' }'
   // SendDingDingMessage(msg,result["股票代码"])
   SendDingDingMessageByType(msg, result["股票代码"], type)
 }
@@ -1828,11 +1816,11 @@ function share(code, name) {
     //message.info(msg)
     notify.info({
       avatar: () =>
-          h(NAvatar, {
-            size: 'small',
-            round: false,
-            src: icon.value
-          }),
+        h(NAvatar, {
+          size: 'small',
+          round: false,
+          src: icon.value
+        }),
       title: '分享到社区',
       duration: 1000 * 30,
       content: () => {
@@ -1852,19 +1840,6 @@ const addTabModel = ref({
   sort: 1,
 })
 const addTabPane = ref(false)
-
-// AI条件过滤选股相关状态
-const aiFilterCondition = ref('')
-const aiFilterLoading = ref(false)
-const aiFilterResult = ref('')
-const aiFilterStocks = ref([]) // 解析出的股票列表
-const aiFilterGroupId = ref(null) // 选择的分组ID
-const aiFilterGroupName = ref('') // 新分组名称
-const aiFilterCreateNewGroup = ref(false) // 是否创建新分组
-const aiFilterConfigId = ref(null) // AI模型配置ID
-const aiFilterSysPromptId = ref(null) // 系统提示词ID
-const aiFilterEnableTools = ref(true) // 是否启用AI函数工具调用（agent默认启用工具）
-const aiFilterThinkingMode = ref(false) // 是否启用思考模式
 
 function addTab() {
   addTabPane.value = true
@@ -1891,285 +1866,6 @@ function AddStockGroupInfo(groupId, code, name) {
     })
   })
 
-}
-
-// 打开AI条件过滤选股对话框
-function openAIFilterStock() {
-  // 重置状态
-  aiFilterCondition.value = ''
-  aiFilterResult.value = ''
-  aiFilterStocks.value = []
-  aiFilterGroupId.value = null
-  aiFilterGroupName.value = ''
-  aiFilterCreateNewGroup.value = false
-  aiFilterEnableTools.value = true // agent默认启用工具
-  aiFilterThinkingMode.value = false
-  
-  // 确保AI配置已加载
-  if (aiConfigs.value.length === 0) {
-    GetAiConfigs().then(res => {
-      aiConfigs.value = res
-      if (res.length > 0) {
-        aiFilterConfigId.value = data.aiConfigId || res[0].ID
-      }
-      // 初始化系统提示词选项（如果需要）
-      if (sysPromptOptions.value.length === 0) {
-        GetPromptTemplates("", "").then(templates => {
-          promptTemplates.value = templates
-          sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
-        })
-      }
-      aiFilterSysPromptId.value = data.sysPromptId
-      modalShow6.value = true
-    })
-  } else {
-    // 初始化AI配置（使用默认配置或data中的配置）
-    if (aiConfigs.value.length > 0) {
-      aiFilterConfigId.value = data.aiConfigId || aiConfigs.value[0].ID
-    }
-    aiFilterSysPromptId.value = data.sysPromptId
-    modalShow6.value = true
-  }
-  
-  // 清理之前的事件监听
-  EventsOff('agent-message')
-}
-
-// 解析AI返回的股票数据
-function parseAIStockData(content) {
-  const stocks = []
-  const seenCodes = new Set()
-  
-  // 方法1: 从markdown表格中解析
-  const tableRegex = /```[\s\S]*?\|[\s\S]*?股票代码[\s\S]*?\|[\s\S]*?股票名称[\s\S]*?\|([\s\S]*?)```/i
-  const tableMatch = content.match(tableRegex)
-  if (tableMatch) {
-    const tableContent = tableMatch[1]
-    const rows = tableContent.split('\n').filter(row => row.trim() && row.includes('|'))
-    
-    rows.forEach(row => {
-      const cells = row.split('|').map(c => c.trim()).filter(c => c && c !== '---')
-      if (cells.length >= 2) {
-        // 查找股票代码（6位数字）
-        const codeIndex = cells.findIndex(c => /^\d{6}$/.test(c))
-        if (codeIndex >= 0) {
-          const code = cells[codeIndex]
-          // 名称通常在代码的下一列
-          const nameIndex = codeIndex + 1
-          const name = nameIndex < cells.length ? cells[nameIndex] : code
-          
-          if (!seenCodes.has(code)) {
-            seenCodes.add(code)
-            stocks.push({ code, name: name || code })
-          }
-        }
-      }
-    })
-  }
-  
-  // 方法2: 如果没有从表格中找到，尝试直接匹配6位数字代码
-  if (stocks.length === 0) {
-    const codeMatches = content.match(/\b\d{6}\b/g)
-    if (codeMatches) {
-      const lines = content.split('\n')
-      codeMatches.forEach(code => {
-        if (!seenCodes.has(code)) {
-          seenCodes.add(code)
-          // 查找包含该代码的行
-          const line = lines.find(l => l.includes(code))
-          let name = code
-          if (line) {
-            // 尝试提取股票名称（在代码后面，去除特殊字符）
-            const parts = line.split(code)
-            if (parts.length > 1) {
-              const afterCode = parts[1].replace(/[|\s\-_*`]+/g, ' ').trim()
-              const nameParts = afterCode.split(/\s+/)
-              if (nameParts.length > 0 && nameParts[0]) {
-                name = nameParts[0]
-              }
-            }
-          }
-          stocks.push({ code, name })
-        }
-      })
-    }
-  }
-  
-  return stocks
-}
-
-// 执行AI筛选
-function executeAIFilter() {
-  if (!aiFilterCondition.value.trim()) {
-    message.warning('请输入筛选条件')
-    return
-  }
-  
-  aiFilterLoading.value = true
-  aiFilterResult.value = ''
-  aiFilterStocks.value = []
-  
-  // 监听AI消息
-  const messageHandler = (msg) => {
-    if (msg.role === 'assistant') {
-      if (msg.reasoning_content) {
-        // 显示思考过程
-        aiFilterResult.value += '\n\n**思考过程：**\n' + msg.reasoning_content
-      }
-      if (msg.content) {
-        aiFilterResult.value += msg.content
-      }
-      if (msg.tool_calls) {
-        // 如果有工具调用，显示工具调用信息
-        for (const tool of msg.tool_calls) {
-          if (tool.function) {
-            aiFilterResult.value += `\n\n**使用工具：** ${tool.function.name}\n`
-            if (tool.function.arguments) {
-              try {
-                const args = typeof tool.function.arguments === 'string' 
-                  ? JSON.parse(tool.function.arguments) 
-                  : tool.function.arguments
-                aiFilterResult.value += `**参数：** \`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`
-              } catch (e) {
-                aiFilterResult.value += `**参数：** ${tool.function.arguments}\n`
-              }
-            }
-          }
-        }
-      }
-    }
-    if (msg.response_meta && msg.response_meta.finish_reason === 'stop') {
-      // AI完成，解析股票数据
-      aiFilterLoading.value = false
-      const stocks = parseAIStockData(aiFilterResult.value)
-      aiFilterStocks.value = stocks
-      if (stocks.length > 0) {
-        message.success(`找到 ${stocks.length} 只符合条件的股票`)
-        // 在结果末尾添加股票列表
-        aiFilterResult.value += `\n\n## 筛选结果\n\n共找到 **${stocks.length}** 只符合条件的股票：\n\n`
-        stocks.forEach((stock, index) => {
-          aiFilterResult.value += `${index + 1}. **${stock.name}** (${stock.code})\n`
-        })
-      } else {
-        message.warning('未找到符合条件的股票，请检查筛选条件')
-      }
-      EventsOff('agent-message')
-    }
-  }
-  
-  EventsOn('agent-message', messageHandler)
-  
-  // 检查AI配置
-  if (!aiFilterConfigId.value) {
-    message.warning('请选择AI模型配置')
-    aiFilterLoading.value = false
-    return
-  }
-  
-  // 构建提示词，让AI使用选股工具
-  const prompt = `请使用选股工具筛选符合以下条件的股票：${aiFilterCondition.value}。筛选完成后，请以表格形式列出所有符合条件的股票代码和股票名称。`
-  
-  // 调用AI（使用用户选择的配置）
-  ChatWithAgent(prompt, aiFilterConfigId.value, aiFilterSysPromptId.value).catch(err => {
-    aiFilterLoading.value = false
-    message.error('AI筛选失败：' + err)
-    EventsOff('agent-message')
-  })
-}
-
-// 将筛选出的股票添加到分组
-function addFilteredStocksToGroup() {
-  if (aiFilterStocks.value.length === 0) {
-    message.warning('没有可添加的股票')
-    return
-  }
-  
-  let targetGroupId = aiFilterGroupId.value
-  
-  // 如果需要创建新分组
-  if (aiFilterCreateNewGroup.value) {
-    if (!aiFilterGroupName.value.trim()) {
-      message.warning('请输入分组名称')
-      return
-    }
-    // 创建新分组
-    const maxSort = groupList.value.length > 0 
-      ? Math.max(...groupList.value.map(g => g.sort)) + 1 
-      : 1
-    AddGroup({
-      name: aiFilterGroupName.value,
-      sort: maxSort
-    }).then(result => {
-      message.info(result)
-      GetGroupList().then(result => {
-        groupList.value = result
-        // 获取新创建的分组ID
-        const newGroup = result.find(g => g.name === aiFilterGroupName.value)
-        if (newGroup) {
-          targetGroupId = newGroup.ID
-          addStocksToGroup(targetGroupId)
-        }
-      })
-    })
-  } else {
-    if (!targetGroupId) {
-      message.warning('请选择分组')
-      return
-    }
-    addStocksToGroup(targetGroupId)
-  }
-}
-
-// 添加股票到分组
-function addStocksToGroup(groupId) {
-  let successCount = 0
-  let failCount = 0
-  
-  const addStock = (index) => {
-    if (index >= aiFilterStocks.value.length) {
-      if (successCount > 0) {
-        message.success(`成功添加 ${successCount} 只股票到分组${failCount > 0 ? `，失败 ${failCount} 只` : ''}`)
-      } else {
-        message.warning(`添加失败，共 ${failCount} 只股票`)
-      }
-      modalShow6.value = false
-      // 刷新分组列表
-      GetGroupList().then(result => {
-        groupList.value = result
-      })
-      return
-    }
-    
-    const stock = aiFilterStocks.value[index]
-    // 转换股票代码格式
-    let code = stock.code.trim()
-    
-    // 如果是6位数字的A股代码，需要根据代码判断市场
-    if (/^\d{6}$/.test(code)) {
-      const firstDigit = code[0]
-      // 6开头是上海，0/3开头是深圳
-      if (firstDigit === '6') {
-        code = 'sh' + code
-      } else if (firstDigit === '0' || firstDigit === '3') {
-        code = 'sz' + code
-      }
-      // 其他情况保持原样
-    }
-    
-    AddStockGroup(groupId, code).then(result => {
-      if (result === '添加成功') {
-        successCount++
-      } else {
-        failCount++
-      }
-      addStock(index + 1)
-    }).catch(() => {
-      failCount++
-      addStock(index + 1)
-    })
-  }
-  
-  addStock(0)
 }
 
 function updateTab(name) {
@@ -2242,13 +1938,13 @@ function searchStockReport(stockCode) {
 // 获取更多操作的下拉菜单选项
 function getMoreOptions(result) {
   const options = []
-  
+
   // 成本
   options.push({
     label: '成本',
     key: 'cost'
   })
-  
+
   // 资金（如果有买一报价）
   if (result['买一报价'] > 0) {
     options.push({
@@ -2256,13 +1952,13 @@ function getMoreOptions(result) {
       key: 'money'
     })
   }
-  
+
   // 详情
   options.push({
     label: '详情',
     key: 'detail'
   })
-  
+
   // 公告（如果有买一报价）
   if (result['买一报价'] > 0) {
     options.push({
@@ -2270,7 +1966,7 @@ function getMoreOptions(result) {
       key: 'notice'
     })
   }
-  
+
   // 研报（如果有买一报价）
   if (result['买一报价'] > 0) {
     options.push({
@@ -2278,13 +1974,13 @@ function getMoreOptions(result) {
       key: 'report'
     })
   }
-  
+
   // 设置分组 - 使用子菜单
   const groupOptions = groupList.value.map(group => ({
     label: group.name,
     key: `group_${group.ID}`
   }))
-  
+
   if (groupOptions.length > 0) {
     options.push({
       label: '设置分组',
@@ -2292,7 +1988,7 @@ function getMoreOptions(result) {
       children: groupOptions
     })
   }
-  
+
   return options
 }
 
@@ -2325,14 +2021,6 @@ function handleMoreAction(key, result) {
       </n-gradient-text>
     </template>
   </vue-danmaku>
-  <n-flex justify="space-between" style="margin-bottom: 10px;--wails-draggable:no-drag" v-if="data.openAiEnable">
-    <n-button type="primary" @click="openAIFilterStock">
-      <template #icon>
-        <n-icon :component="ChatboxOutline"/>
-      </template>
-      AI条件过滤选股
-    </n-button>
-  </n-flex>
   <n-tabs type="card" style="--wails-draggable:no-drag" animated addable :data-currentGroupId="currentGroupId"
           :value="String(currentGroupId)" @add="addTab" @update:value="updateTab" placement="top" @close="(key)=>{delTab(key)}">
 
@@ -2439,7 +2127,7 @@ function handleMoreAction(key, result) {
                 <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
                 <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
                   {{
-                    "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                  "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
                   }}
                 </n-tag>
               </n-flex>
@@ -2576,7 +2264,7 @@ function handleMoreAction(key, result) {
                 <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
                 <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
                   {{
-                    "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                  "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
                   }}
                 </n-tag>
               </n-flex>
@@ -2688,9 +2376,9 @@ function handleMoreAction(key, result) {
 
   <n-modal v-model:show="addTabPane" title="添加分组" style="width: 400px;text-align: left" :preset="'card'">
     <n-form
-        :model="addTabModel"
-        size="medium"
-        label-placement="left"
+      :model="addTabModel"
+      size="medium"
+      label-placement="left"
     >
       <n-grid :cols="2">
         <n-form-item-gi label="分组名称:" path="name" :span="5">
@@ -2801,137 +2489,6 @@ function handleMoreAction(key, result) {
   <n-modal v-model:show="modalShow5" :title="data.name+'资金趋势'" style="width: 1000px" :preset="'card'">
     <money-trend :code="data.code" :name="data.name" :days="360" :dark-theme="data.darkTheme"
                  :chart-height="500"></money-trend>
-  </n-modal>
-
-  <!-- AI条件过滤选股对话框 -->
-  <n-modal v-model:show="modalShow6" title="AI条件过滤选股" style="width: 1000px" :preset="'card'"
-           @after-leave="() => { EventsOff('agent-message') }">
-    <n-spin :show="aiFilterLoading">
-      <n-form label-placement="left" label-width="120px">
-        <!-- AI配置选项 -->
-        <n-form-item label="AI模型配置">
-          <n-select
-            v-model:value="aiFilterConfigId"
-            label-field="name"
-            value-field="ID"
-            :options="aiConfigs"
-            placeholder="请选择AI模型服务配置"
-            :disabled="aiFilterLoading"
-            style="width: 100%"
-          />
-        </n-form-item>
-        <n-form-item label="系统提示词">
-          <n-select
-            v-model:value="aiFilterSysPromptId"
-            label-field="name"
-            value-field="ID"
-            :options="sysPromptOptions"
-            placeholder="请选择系统提示词（可选）"
-            :disabled="aiFilterLoading"
-            clearable
-            style="width: 100%"
-          />
-        </n-form-item>
-        <n-form-item label="工具调用">
-          <n-switch v-model:value="aiFilterEnableTools" :round="false" :disabled="true">
-            <template #checked>
-              已启用（Agent默认启用工具调用）
-            </template>
-            <template #unchecked>
-              未启用
-            </template>
-          </n-switch>
-          <n-text type="info" style="margin-left: 10px; font-size: 12px;">
-            Agent系统默认启用工具调用以增强选股能力
-          </n-text>
-        </n-form-item>
-        
-        <n-divider />
-        
-        <n-form-item label="筛选条件">
-          <n-input
-            v-model:value="aiFilterCondition"
-            type="textarea"
-            placeholder="请输入筛选条件，例如：市盈率小于20，市值大于100亿，近5日涨幅大于5%"
-            :rows="3"
-            :disabled="aiFilterLoading"
-          />
-        </n-form-item>
-        <n-form-item>
-          <n-button type="primary" @click="executeAIFilter" :loading="aiFilterLoading" :disabled="!aiFilterCondition.trim() || !aiFilterConfigId">
-            开始筛选
-          </n-button>
-        </n-form-item>
-      </n-form>
-      
-      <!-- AI筛选过程和结果文字面板 -->
-      <n-divider v-if="aiFilterResult || aiFilterLoading" />
-      <div v-if="aiFilterResult || aiFilterLoading" style="margin-top: 10px;">
-        <n-text strong style="font-size: 16px; margin-bottom: 10px; display: block;">筛选过程和结果：</n-text>
-        <div style="border: 1px solid var(--n-border-color); border-radius: 4px; padding: 10px; background: var(--n-color); min-height: 400px;">
-          <MdPreview 
-            ref="aiFilterPreviewRef" 
-            style="height: 400px; text-align: left; max-height: 500px; overflow-y: auto;" 
-            :modelValue="aiFilterResult || (aiFilterLoading ? '正在筛选中，请稍候...' : '')" 
-            :theme="theme"
-          />
-        </div>
-      </div>
-      
-      <!-- 筛选出的股票列表和添加到分组 -->
-      <n-form v-if="aiFilterStocks.length > 0" label-placement="left" label-width="120px" style="margin-top: 20px;">
-        <n-form-item label="筛选结果">
-          <div style="max-height: 150px; overflow-y: auto;">
-            <n-tag
-              v-for="stock in aiFilterStocks"
-              :key="stock.code"
-              style="margin: 4px;"
-              type="info"
-            >
-              {{ stock.code }} - {{ stock.name }}
-            </n-tag>
-          </div>
-          <n-text type="info" style="display: block; margin-top: 8px;">
-            共找到 {{ aiFilterStocks.length }} 只符合条件的股票
-          </n-text>
-        </n-form-item>
-        
-        <n-form-item v-if="aiFilterStocks.length > 0" label="添加到分组">
-          <n-radio-group v-model:value="aiFilterCreateNewGroup">
-            <n-radio :value="false">使用现有分组</n-radio>
-            <n-radio :value="true">创建新分组</n-radio>
-          </n-radio-group>
-        </n-form-item>
-        
-        <n-form-item v-if="aiFilterStocks.length > 0 && !aiFilterCreateNewGroup" label="选择分组">
-          <n-select
-            v-model:value="aiFilterGroupId"
-            :options="groupList.map(g => ({ label: g.name, value: g.ID }))"
-            placeholder="请选择分组"
-          />
-        </n-form-item>
-        
-        <n-form-item v-if="aiFilterStocks.length > 0 && aiFilterCreateNewGroup" label="新分组名称">
-          <n-input
-            v-model:value="aiFilterGroupName"
-            placeholder="请输入分组名称"
-          />
-        </n-form-item>
-      </n-form>
-      
-      <template #footer>
-        <n-flex justify="space-between">
-          <n-button @click="modalShow6 = false">取消</n-button>
-          <n-button
-            type="primary"
-            @click="addFilteredStocksToGroup"
-            :disabled="aiFilterStocks.length === 0 || (!aiFilterCreateNewGroup && !aiFilterGroupId) || (aiFilterCreateNewGroup && !aiFilterGroupName.trim())"
-          >
-            添加到分组
-          </n-button>
-        </n-flex>
-      </template>
-    </n-spin>
   </n-modal>
 </template>
 
