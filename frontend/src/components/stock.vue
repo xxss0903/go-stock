@@ -38,6 +38,7 @@ import {
 import {
   NAvatar,
   NButton,
+  NDivider,
   NDropdown,
   NFlex,
   NForm,
@@ -49,6 +50,7 @@ import {
   NRadioGroup,
   NSelect,
   NSpin,
+  NSwitch,
   NTag,
   NText,
   useDialog,
@@ -104,6 +106,7 @@ const enableEditor = ref(false)
 const mdPreviewRef = ref(null)
 const mdEditorRef = ref(null)
 const tipsRef = ref(null)
+const aiFilterPreviewRef = ref(null) // AI筛选结果预览引用
 const message = useMessage()
 const notify = useNotification()
 const stocks = ref([])
@@ -1858,6 +1861,10 @@ const aiFilterStocks = ref([]) // 解析出的股票列表
 const aiFilterGroupId = ref(null) // 选择的分组ID
 const aiFilterGroupName = ref('') // 新分组名称
 const aiFilterCreateNewGroup = ref(false) // 是否创建新分组
+const aiFilterConfigId = ref(null) // AI模型配置ID
+const aiFilterSysPromptId = ref(null) // 系统提示词ID
+const aiFilterEnableTools = ref(true) // 是否启用AI函数工具调用（agent默认启用工具）
+const aiFilterThinkingMode = ref(false) // 是否启用思考模式
 
 function addTab() {
   addTabPane.value = true
@@ -1888,13 +1895,42 @@ function AddStockGroupInfo(groupId, code, name) {
 
 // 打开AI条件过滤选股对话框
 function openAIFilterStock() {
-  modalShow6.value = true
+  // 重置状态
   aiFilterCondition.value = ''
   aiFilterResult.value = ''
   aiFilterStocks.value = []
   aiFilterGroupId.value = null
   aiFilterGroupName.value = ''
   aiFilterCreateNewGroup.value = false
+  aiFilterEnableTools.value = true // agent默认启用工具
+  aiFilterThinkingMode.value = false
+  
+  // 确保AI配置已加载
+  if (aiConfigs.value.length === 0) {
+    GetAiConfigs().then(res => {
+      aiConfigs.value = res
+      if (res.length > 0) {
+        aiFilterConfigId.value = data.aiConfigId || res[0].ID
+      }
+      // 初始化系统提示词选项（如果需要）
+      if (sysPromptOptions.value.length === 0) {
+        GetPromptTemplates("", "").then(templates => {
+          promptTemplates.value = templates
+          sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
+        })
+      }
+      aiFilterSysPromptId.value = data.sysPromptId
+      modalShow6.value = true
+    })
+  } else {
+    // 初始化AI配置（使用默认配置或data中的配置）
+    if (aiConfigs.value.length > 0) {
+      aiFilterConfigId.value = data.aiConfigId || aiConfigs.value[0].ID
+    }
+    aiFilterSysPromptId.value = data.sysPromptId
+    modalShow6.value = true
+  }
+  
   // 清理之前的事件监听
   EventsOff('agent-message')
 }
@@ -1976,14 +2012,28 @@ function executeAIFilter() {
   // 监听AI消息
   const messageHandler = (msg) => {
     if (msg.role === 'assistant') {
+      if (msg.reasoning_content) {
+        // 显示思考过程
+        aiFilterResult.value += '\n\n**思考过程：**\n' + msg.reasoning_content
+      }
       if (msg.content) {
         aiFilterResult.value += msg.content
       }
       if (msg.tool_calls) {
-        // 如果有工具调用，说明AI正在使用选股工具
+        // 如果有工具调用，显示工具调用信息
         for (const tool of msg.tool_calls) {
-          if (tool.function && tool.function.name === 'ChoiceStockByIndicators') {
-            // AI正在使用选股工具
+          if (tool.function) {
+            aiFilterResult.value += `\n\n**使用工具：** ${tool.function.name}\n`
+            if (tool.function.arguments) {
+              try {
+                const args = typeof tool.function.arguments === 'string' 
+                  ? JSON.parse(tool.function.arguments) 
+                  : tool.function.arguments
+                aiFilterResult.value += `**参数：** \`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\`\n`
+              } catch (e) {
+                aiFilterResult.value += `**参数：** ${tool.function.arguments}\n`
+              }
+            }
           }
         }
       }
@@ -1995,6 +2045,11 @@ function executeAIFilter() {
       aiFilterStocks.value = stocks
       if (stocks.length > 0) {
         message.success(`找到 ${stocks.length} 只符合条件的股票`)
+        // 在结果末尾添加股票列表
+        aiFilterResult.value += `\n\n## 筛选结果\n\n共找到 **${stocks.length}** 只符合条件的股票：\n\n`
+        stocks.forEach((stock, index) => {
+          aiFilterResult.value += `${index + 1}. **${stock.name}** (${stock.code})\n`
+        })
       } else {
         message.warning('未找到符合条件的股票，请检查筛选条件')
       }
@@ -2004,11 +2059,18 @@ function executeAIFilter() {
   
   EventsOn('agent-message', messageHandler)
   
+  // 检查AI配置
+  if (!aiFilterConfigId.value) {
+    message.warning('请选择AI模型配置')
+    aiFilterLoading.value = false
+    return
+  }
+  
   // 构建提示词，让AI使用选股工具
   const prompt = `请使用选股工具筛选符合以下条件的股票：${aiFilterCondition.value}。筛选完成后，请以表格形式列出所有符合条件的股票代码和股票名称。`
   
-  // 调用AI
-  ChatWithAgent(prompt, data.aiConfigId, data.sysPromptId).catch(err => {
+  // 调用AI（使用用户选择的配置）
+  ChatWithAgent(prompt, aiFilterConfigId.value, aiFilterSysPromptId.value).catch(err => {
     aiFilterLoading.value = false
     message.error('AI筛选失败：' + err)
     EventsOff('agent-message')
@@ -2742,10 +2804,50 @@ function handleMoreAction(key, result) {
   </n-modal>
 
   <!-- AI条件过滤选股对话框 -->
-  <n-modal v-model:show="modalShow6" title="AI条件过滤选股" style="width: 800px" :preset="'card'"
+  <n-modal v-model:show="modalShow6" title="AI条件过滤选股" style="width: 1000px" :preset="'card'"
            @after-leave="() => { EventsOff('agent-message') }">
     <n-spin :show="aiFilterLoading">
-      <n-form label-placement="left" label-width="100px">
+      <n-form label-placement="left" label-width="120px">
+        <!-- AI配置选项 -->
+        <n-form-item label="AI模型配置">
+          <n-select
+            v-model:value="aiFilterConfigId"
+            label-field="name"
+            value-field="ID"
+            :options="aiConfigs"
+            placeholder="请选择AI模型服务配置"
+            :disabled="aiFilterLoading"
+            style="width: 100%"
+          />
+        </n-form-item>
+        <n-form-item label="系统提示词">
+          <n-select
+            v-model:value="aiFilterSysPromptId"
+            label-field="name"
+            value-field="ID"
+            :options="sysPromptOptions"
+            placeholder="请选择系统提示词（可选）"
+            :disabled="aiFilterLoading"
+            clearable
+            style="width: 100%"
+          />
+        </n-form-item>
+        <n-form-item label="工具调用">
+          <n-switch v-model:value="aiFilterEnableTools" :round="false" :disabled="true">
+            <template #checked>
+              已启用（Agent默认启用工具调用）
+            </template>
+            <template #unchecked>
+              未启用
+            </template>
+          </n-switch>
+          <n-text type="info" style="margin-left: 10px; font-size: 12px;">
+            Agent系统默认启用工具调用以增强选股能力
+          </n-text>
+        </n-form-item>
+        
+        <n-divider />
+        
         <n-form-item label="筛选条件">
           <n-input
             v-model:value="aiFilterCondition"
@@ -2756,18 +2858,29 @@ function handleMoreAction(key, result) {
           />
         </n-form-item>
         <n-form-item>
-          <n-button type="primary" @click="executeAIFilter" :loading="aiFilterLoading" :disabled="!aiFilterCondition.trim()">
+          <n-button type="primary" @click="executeAIFilter" :loading="aiFilterLoading" :disabled="!aiFilterCondition.trim() || !aiFilterConfigId">
             开始筛选
           </n-button>
         </n-form-item>
-        
-        <n-form-item v-if="aiFilterResult" label="AI分析结果">
-          <div style="max-height: 200px; overflow-y: auto; padding: 10px; background: var(--n-color); border-radius: 4px;">
-            <n-text>{{ aiFilterResult }}</n-text>
-          </div>
-        </n-form-item>
-        
-        <n-form-item v-if="aiFilterStocks.length > 0" label="筛选结果">
+      </n-form>
+      
+      <!-- AI筛选过程和结果文字面板 -->
+      <n-divider v-if="aiFilterResult || aiFilterLoading" />
+      <div v-if="aiFilterResult || aiFilterLoading" style="margin-top: 10px;">
+        <n-text strong style="font-size: 16px; margin-bottom: 10px; display: block;">筛选过程和结果：</n-text>
+        <div style="border: 1px solid var(--n-border-color); border-radius: 4px; padding: 10px; background: var(--n-color); min-height: 400px;">
+          <MdPreview 
+            ref="aiFilterPreviewRef" 
+            style="height: 400px; text-align: left; max-height: 500px; overflow-y: auto;" 
+            :modelValue="aiFilterResult || (aiFilterLoading ? '正在筛选中，请稍候...' : '')" 
+            :theme="theme"
+          />
+        </div>
+      </div>
+      
+      <!-- 筛选出的股票列表和添加到分组 -->
+      <n-form v-if="aiFilterStocks.length > 0" label-placement="left" label-width="120px" style="margin-top: 20px;">
+        <n-form-item label="筛选结果">
           <div style="max-height: 150px; overflow-y: auto;">
             <n-tag
               v-for="stock in aiFilterStocks"
