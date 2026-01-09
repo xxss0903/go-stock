@@ -153,7 +153,7 @@ func main() {
 		Assets:                   assets,
 		Menu:                     AppMenu,
 		Logger:                   nil,
-		LogLevel:                 logger.DEBUG,
+		LogLevel:                 logger.ERROR, // 开发环境也只显示ERROR级别
 		LogLevelProduction:       logger.ERROR,
 		OnStartup:                app.startup,
 		OnDomReady:               app.domReady,

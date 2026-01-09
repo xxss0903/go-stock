@@ -14,6 +14,7 @@ import (
 var Dao *gorm.DB
 
 func Init(sqlitePath string) {
+	// 关闭GORM日志输出
 	dbLogger := logger.New(
 		log.New(os.Stdout, "\r\n", log.LstdFlags),
 		logger.Config{
@@ -21,7 +22,7 @@ func Init(sqlitePath string) {
 			Colorful:                  false,
 			IgnoreRecordNotFoundError: true,
 			ParameterizedQueries:      false,
-			LogLevel:                  logger.Info,
+			LogLevel:                  logger.Silent, // 设置为Silent关闭所有日志
 		},
 	)
 	var openDb *gorm.DB

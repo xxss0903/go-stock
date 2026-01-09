@@ -5,7 +5,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"os"
 	"time"
 )
 
@@ -35,9 +34,9 @@ func InitLogger() {
 
 	//生成core
 	//multiWriteSyncer := zapcore.NewMultiWriteSyncer(writerSyncer, zapcore.AddSync(os.Stdout)) //AddSync将io.Writer转换成WriteSyncer的类型
-	//同时输出到控制台 和 指定的日志文件中
-	infoFileCore := zapcore.NewCore(encoder, zapcore.NewMultiWriteSyncer(infoFileWriteSyncer, zapcore.AddSync(os.Stdout)), lowPriority)
-	errorFileCore := zapcore.NewCore(encoder, zapcore.NewMultiWriteSyncer(errorFileWriteSyncer, zapcore.AddSync(os.Stdout)), highPriority)
+	//只输出到日志文件，不输出到控制台
+	infoFileCore := zapcore.NewCore(encoder, infoFileWriteSyncer, lowPriority)
+	errorFileCore := zapcore.NewCore(encoder, errorFileWriteSyncer, highPriority)
 
 	//将infocore 和 errcore 加入core切片
 	var coreArr []zapcore.Core
