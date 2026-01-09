@@ -362,21 +362,7 @@ function ReFlesh(source) {
       <n-tab-pane name="市场快讯" tab="市场快讯">
         <n-grid :cols="1" :y-gap="0">
           <n-gi>
-            <AnalyzeMartket :dark-theme="darkTheme" :chart-height="300" :kDays="1" :name="'最近24小时热词'" />
-          </n-gi>
-          <n-gi>
-            <n-grid :cols="foreignNewsList.length?3:2" :y-gap="0">
-              <n-gi>
-                <news-list :newsList="telegraphList" :header-title="'财联社电报'" @update:message="ReFlesh"></news-list>
-              </n-gi>
-              <n-gi>
-                <news-list :newsList="sinaNewsList" :header-title="'新浪财经'" @update:message="ReFlesh"></news-list>
-              </n-gi>
-              <n-gi v-if="foreignNewsList.length>0">
-                <news-list :newsList="foreignNewsList" :header-title="'外媒'" @update:message="ReFlesh"></news-list>
-              </n-gi>
-
-            </n-grid>
+            <AnalyzeMartket :dark-theme="darkTheme" :chart-height="600" :kDays="1" :name="'最近24小时热词'" />
           </n-gi>
         </n-grid>
 

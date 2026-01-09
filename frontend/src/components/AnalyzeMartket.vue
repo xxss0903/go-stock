@@ -77,7 +77,18 @@ function  handleChart(){
   AnalyzeSentimentWithFreqWeight("").then((res) => {
     const treemapchart = echarts.init(chartRef.value);
     const gaugeChart=echarts.init(gaugeChartRef.value);
-    let data = res['frequencies'].map(item => ({
+    
+    // 过滤掉频次低的热词，只保留频次较高的
+    const frequencies = res['frequencies'];
+    // 计算频次的平均值
+    const avgFrequency = frequencies.reduce((sum, item) => sum + item.Frequency, 0) / frequencies.length;
+    // 只保留频次大于平均值的热词，或者最多显示前50个
+    const filteredFrequencies = frequencies
+      .filter(item => item.Frequency >= avgFrequency)
+      .sort((a, b) => b.Frequency - a.Frequency)
+      .slice(0, 50);
+    
+    let data = filteredFrequencies.map(item => ({
       name: item.Word,
       // value: item.Frequency,
       // value: item.Weight,
@@ -86,7 +97,7 @@ function  handleChart(){
       value: item.Score,
     }));
 
-    let data2 = res['frequencies'].map(item => ({
+    let data2 = filteredFrequencies.map(item => ({
       name: item.Word,
        value: item.Frequency,
       // value: item.Weight,
@@ -95,7 +106,7 @@ function  handleChart(){
       //value: item.Score,
     }));
 
-    let data3 = res['frequencies'].map(item => ({
+    let data3 = filteredFrequencies.map(item => ({
       name: item.Word,
       //value: item.Frequency,
        value: item.Weight,
@@ -299,12 +310,12 @@ function  handleChart(){
       <template #header-extra>
         主要股指
       </template>
-      <n-grid :cols="24" :y-gap="0">
-        <n-gi span="6">
-          <div ref="gaugeChartRef" style="width: 100%;height: auto;--wails-draggable:no-drag" :style="{height:chartHeight+'px'}" ></div>
+      <n-grid :cols="1" :y-gap="20">
+        <n-gi>
+          <div ref="gaugeChartRef" style="width: 100%;height: auto;--wails-draggable:no-drag;" :style="{height:(chartHeight/2)+'px'}" ></div>
         </n-gi>
-        <n-gi span="18">
-          <div ref="chartRef" style="width: 100%;height: auto;--wails-draggable:no-drag" :style="{height:chartHeight+'px'}" ></div>
+        <n-gi>
+          <div ref="chartRef" style="width: 100%;height: auto;--wails-draggable:no-drag;margin-top: 20px;" :style="{height:(chartHeight)+'px'}" ></div>
         </n-gi>
       </n-grid>
     </n-collapse-item>
