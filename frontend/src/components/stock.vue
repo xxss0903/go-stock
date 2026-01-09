@@ -31,6 +31,7 @@ import {
   SetStockAICron,
   SetStockSort,
   ShareAnalysis,
+  SummaryStockNews,
   UnFollow,
   UpdateGroupSort
 } from '../../wailsjs/go/main/App'
@@ -41,7 +42,15 @@ import {
   NFlex,
   NForm,
   NFormItem,
+  NGradientText,
+  NIcon,
+  NInput,
   NInputNumber,
+  NModal,
+  NSelect,
+  NSpin,
+  NSwitch,
+  NTag,
   NText,
   useDialog,
   useMessage,
@@ -56,7 +65,7 @@ import {
   WindowReload,
   WindowUnfullscreen
 } from '../../wailsjs/runtime'
-import {Add, ChatboxOutline,} from '@vicons/ionicons5'
+import {Add, ChatboxOutline, PulseOutline} from '@vicons/ionicons5'
 import {MdEditor, MdPreview} from 'md-editor-v3';
 // preview.css相比style.css少了编辑器那部分样式
 //import 'md-editor-v3/lib/preview.css';
@@ -109,6 +118,7 @@ const modalShow2 = ref(false)
 const modalShow3 = ref(false)
 const modalShow4 = ref(false)
 const modalShow5 = ref(false)
+const summaryModal = ref(false) // AI总结对话框
 const addBTN = ref(true)
 const enableTools = ref(false)
 const thinkingMode = ref(false)
@@ -127,6 +137,15 @@ const promptTemplates = ref([])
 const aiConfigs = ref([])
 const sysPromptOptions = ref([])
 const userPromptOptions = ref([])
+// AI总结相关状态
+const aiSummary = ref('')
+const aiSummaryTime = ref('')
+const aiSummaryModelName = ref('')
+const aiSummaryChatId = ref('')
+const aiSummaryQuestion = ref('')
+const aiSummaryConfigId = ref(null)
+const aiSummarySysPromptId = ref(null)
+const aiSummaryLoading = ref(false)
 const data = reactive({
   modelName: "",
   chatId: "",
@@ -337,6 +356,10 @@ onBeforeMount(() => {
   GetAiConfigs().then(res => {
     aiConfigs.value = res
     data.aiConfigId = res[0].ID
+    // 初始化AI总结的配置
+    if (res.length > 0) {
+      aiSummaryConfigId.value = res[0].ID
+    }
   })
 
   EventsOn("loadingDone", (data) => {
@@ -397,6 +420,41 @@ onBeforeMount(() => {
         data.airesult = data.airesult + msg.extraContent
       }
 
+    }
+  })
+
+  // 监听市场行情的AI总结事件
+  EventsOn("summaryStockNews", async (msg) => {
+    aiSummaryLoading.value = false
+    if (msg === "DONE") {
+      await SaveAIResponseResult("股票自选", "股票自选", aiSummary.value, aiSummaryChatId.value, aiSummaryQuestion.value, aiSummaryConfigId.value)
+      message.info("AI分析完成！")
+      message.destroyAll()
+    } else {
+      // 检查是否是错误消息 (code === 0 表示错误)
+      if (msg.code === 0 && msg.content) {
+        message.error("AI分析出错，请查看下方错误信息")
+        aiSummary.value = aiSummary.value + "\n\n" + msg.content
+        return
+      }
+      if (msg.chatId) {
+        aiSummaryChatId.value = msg.chatId
+      }
+      if (msg.question) {
+        aiSummaryQuestion.value = msg.question
+      }
+      if (msg.content) {
+        aiSummary.value = aiSummary.value + msg.content
+      }
+      if (msg.extraContent) {
+        aiSummary.value = aiSummary.value + msg.extraContent
+      }
+      if (msg.model) {
+        aiSummaryModelName.value = msg.model
+      }
+      if (msg.time) {
+        aiSummaryTime.value = msg.time
+      }
     }
   })
 
@@ -601,6 +659,7 @@ onBeforeUnmount(() => {
   EventsOff("stock_price")
   EventsOff("refreshFollowList")
   EventsOff("newChatStream")
+  EventsOff("summaryStockNews")
   EventsOff("changeTab")
   EventsOff("updateVersion")
   EventsOff("warnMsg")
@@ -1841,6 +1900,79 @@ const addTabModel = ref({
 })
 const addTabPane = ref(false)
 
+// AI总结相关函数
+function reAiSummary() {
+  aiSummary.value = ""
+  summaryModal.value = true
+  aiSummaryLoading.value = true
+  SummaryStockNews(aiSummaryQuestion.value, aiSummaryConfigId.value, aiSummarySysPromptId.value, enableTools.value, thinkingMode.value)
+}
+
+function getAiSummary() {
+  summaryModal.value = true
+  aiSummaryLoading.value = true
+  GetAIResponseResult("股票自选").then(result => {
+    aiSummaryLoading.value = false
+    if (result.content) {
+      aiSummary.value = result.content
+      aiSummaryQuestion.value = result.question
+      aiSummaryLoading.value = false
+
+      const date = new Date(result.CreatedAt);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      aiSummaryTime.value = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+      aiSummaryModelName.value = result.modelName
+    } else {
+      aiSummaryTime.value = ""
+      aiSummary.value = ""
+      aiSummaryModelName.value = ""
+    }
+  })
+}
+
+async function copyAiSummaryToClipboard() {
+  try {
+    await navigator.clipboard.writeText(aiSummary.value);
+    message.success('分析结果已复制到剪切板');
+  } catch (err) {
+    message.error('复制失败: ' + err);
+  }
+}
+
+function saveAiSummaryAsMarkdown() {
+  SaveAsMarkdown('股票自选', '股票自选').then(result => {
+    message.success(result)
+  })
+}
+
+function shareAiSummary() {
+  ShareAnalysis('股票自选', '股票自选').then(msg => {
+    notify.info({
+      avatar: () =>
+        h(NAvatar, {
+          size: 'small',
+          round: false,
+          src: icon.value
+        }),
+      title: '分享到社区',
+      duration: 1000 * 30,
+      content: () => {
+        return h('div', {
+          style: {
+            'text-align': 'left',
+            'font-size': '14px',
+          }
+        }, {default: () => msg})
+      },
+    })
+  })
+}
+
 function addTab() {
   addTabPane.value = true
 }
@@ -2490,6 +2622,76 @@ function handleMoreAction(key, result) {
     <money-trend :code="data.code" :name="data.name" :days="360" :dark-theme="data.darkTheme"
                  :chart-height="500"></money-trend>
   </n-modal>
+
+  <!-- AI总结对话框 -->
+  <n-modal transform-origin="center" v-model:show="summaryModal" preset="card" style="width: 800px;"
+           :title="'AI股票自选总结'">
+    <n-spin size="small" :show="aiSummaryLoading">
+      <MdPreview style="height: 440px;text-align: left" :modelValue="aiSummary" :theme="theme"/>
+    </n-spin>
+    <template #footer>
+      <n-flex justify="space-between" ref="tipsRef">
+        <n-text type="info" v-if="aiSummaryTime">
+          <n-tag v-if="aiSummaryModelName" type="warning" round :title="aiSummaryChatId" :bordered="false">{{ aiSummaryModelName }}</n-tag>
+          {{ aiSummaryTime }}
+        </n-text>
+        <n-text type="error">*AI分析结果仅供参考，请以实际行情为准。投资需谨慎，风险自担。</n-text>
+      </n-flex>
+    </template>
+    <template #action>
+      <n-flex justify="left" style="margin-bottom: 10px">
+        <n-switch v-model:value="enableTools" :round="false">
+          <template #checked>
+            启用AI函数工具调用
+          </template>
+          <template #unchecked>
+            不启用AI函数工具调用
+          </template>
+        </n-switch>
+        <n-switch v-model:value="thinkingMode" :round="false">
+          <template #checked>
+            启用思考模式
+          </template>
+          <template #unchecked>
+            不启用思考模式
+          </template>
+        </n-switch>
+        <n-gradient-text type="error" style="margin-left: 10px">*AI函数工具调用可以增强AI获取数据的能力,但会消耗更多tokens。</n-gradient-text>
+      </n-flex>
+      <n-flex justify="space-between" style="margin-bottom: 10px">
+        <n-select style="width: 32%" v-model:value="aiSummaryConfigId" label-field="name" value-field="ID"
+                  :options="aiConfigs" placeholder="请选择AI模型服务配置"/>
+        <n-select style="width: 32%" v-model:value="aiSummarySysPromptId" label-field="name" value-field="ID"
+                  :options="sysPromptOptions" placeholder="请选择系统提示词"/>
+        <n-select style="width: 32%" v-model:value="aiSummaryQuestion" label-field="name" value-field="content"
+                  :options="userPromptOptions" placeholder="请选择用户提示词"/>
+      </n-flex>
+      <n-flex justify="right">
+        <n-input v-model:value="aiSummaryQuestion" style="text-align: left" clearable
+                 type="textarea"
+                 :show-count="true"
+                 placeholder="请输入您的问题:例如 总结和分析股票市场新闻中的投资机会"
+                 :autosize="{
+              minRows: 2,
+              maxRows: 5
+            }"
+        />
+        <n-button size="tiny" type="warning" @click="reAiSummary">再次总结</n-button>
+        <n-button size="tiny" type="success" @click="copyAiSummaryToClipboard">复制到剪切板</n-button>
+        <n-button size="tiny" type="primary" @click="saveAiSummaryAsMarkdown">保存为Markdown文件</n-button>
+        <n-button size="tiny" type="error" @click="shareAiSummary">分享到项目社区</n-button>
+      </n-flex>
+    </template>
+  </n-modal>
+
+  <!-- AI总结按钮 -->
+  <div style="position: fixed;bottom: 70px;right:5px;z-index: 10;" v-if="data.openAiEnable">
+    <n-input-group>
+      <n-button type="primary" @click="getAiSummary">
+        <n-icon :component="PulseOutline"/> &nbsp;AI总结
+      </n-button>
+    </n-input-group>
+  </div>
 </template>
 
 <style scoped>

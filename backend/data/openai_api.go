@@ -822,35 +822,37 @@ func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptI
 
 		}()
 
-		go func() {
-			defer wg.Done()
-			messages := SearchStockPriceInfo(stock, stockCode, o.CrawlTimeOut)
-			if messages == nil || len(*messages) == 0 {
-				logger.SugaredLogger.Error("获取股票价格失败")
-				//ch <- "***❗获取股票价格失败,分析结果可能不准确***<hr>"
-				ch <- map[string]any{
-					"code":         1,
-					"question":     question,
-					"extraContent": "***❗获取股票价格失败,分析结果可能不准确***<hr>",
-				}
-				go runtime.EventsEmit(o.ctx, "warnMsg", "❗获取股票价格失败,分析结果可能不准确")
-				return
-			}
-			price := ""
-			for _, message := range *messages {
-				price += message + ";"
-			}
-			msg = append(msg, map[string]interface{}{
-				"role":    "user",
-				"content": stock + "股价数据",
-			})
-			msg = append(msg, map[string]interface{}{
-				"role":    "assistant",
-				"content": "\n## " + stock + "股价数据：\n" + price,
-			})
-			logger.SugaredLogger.Infof("SearchStockPriceInfo stock:%s stockCode:%s", stock, stockCode)
-			logger.SugaredLogger.Infof("SearchStockPriceInfo assistant:%s", "\n## "+stock+"股价数据：\n"+price)
-		}()
+	// 暂时禁用股票价格获取，直接进行AI对话测试
+	go func() {
+		defer wg.Done()
+		// messages := SearchStockPriceInfo(stock, stockCode, o.CrawlTimeOut)
+		// if messages == nil || len(*messages) == 0 {
+		// 	logger.SugaredLogger.Error("获取股票价格失败")
+		// 	//ch <- "***❗获取股票价格失败,分析结果可能不准确***<hr>"
+		// 	ch <- map[string]any{
+		// 		"code":         1,
+		// 		"question":     question,
+		// 		"extraContent": "***❗获取股票价格失败,分析结果可能不准确***<hr>",
+		// 	}
+		// 	go runtime.EventsEmit(o.ctx, "warnMsg", "❗获取股票价格失败,分析结果可能不准确")
+		// 	return
+		// }
+		// price := ""
+		// for _, message := range *messages {
+		// 	price += message + ";"
+		// }
+		// msg = append(msg, map[string]interface{}{
+		// 	"role":    "user",
+		// 	"content": stock + "股价数据",
+		// })
+		// msg = append(msg, map[string]interface{}{
+		// 	"role":    "assistant",
+		// 	"content": "\n## " + stock + "股价数据：\n" + price,
+		// })
+		// logger.SugaredLogger.Infof("SearchStockPriceInfo stock:%s stockCode:%s", stock, stockCode)
+		// logger.SugaredLogger.Infof("SearchStockPriceInfo assistant:%s", "\n## "+stock+"股价数据：\n"+price)
+		return // 直接返回，不执行股票价格获取
+	}()
 
 		go func() {
 			defer wg.Done()
