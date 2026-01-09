@@ -4,6 +4,7 @@ import * as echarts from 'echarts';
 import {
   AddGroup,
   AddStockGroup,
+  ChatWithAgent,
   Follow,
   GetAiConfigs,
   GetAIResponseResult,
@@ -41,7 +42,14 @@ import {
   NFlex,
   NForm,
   NFormItem,
+  NInput,
   NInputNumber,
+  NModal,
+  NRadio,
+  NRadioGroup,
+  NSelect,
+  NSpin,
+  NTag,
   NText,
   useDialog,
   useMessage,
@@ -109,6 +117,7 @@ const modalShow2 = ref(false)
 const modalShow3 = ref(false)
 const modalShow4 = ref(false)
 const modalShow5 = ref(false)
+const modalShow6 = ref(false) // AI条件过滤选股
 const addBTN = ref(true)
 const enableTools = ref(false)
 const thinkingMode = ref(false)
@@ -1841,6 +1850,15 @@ const addTabModel = ref({
 })
 const addTabPane = ref(false)
 
+// AI条件过滤选股相关状态
+const aiFilterCondition = ref('')
+const aiFilterLoading = ref(false)
+const aiFilterResult = ref('')
+const aiFilterStocks = ref([]) // 解析出的股票列表
+const aiFilterGroupId = ref(null) // 选择的分组ID
+const aiFilterGroupName = ref('') // 新分组名称
+const aiFilterCreateNewGroup = ref(false) // 是否创建新分组
+
 function addTab() {
   addTabPane.value = true
 }
@@ -1866,6 +1884,230 @@ function AddStockGroupInfo(groupId, code, name) {
     })
   })
 
+}
+
+// 打开AI条件过滤选股对话框
+function openAIFilterStock() {
+  modalShow6.value = true
+  aiFilterCondition.value = ''
+  aiFilterResult.value = ''
+  aiFilterStocks.value = []
+  aiFilterGroupId.value = null
+  aiFilterGroupName.value = ''
+  aiFilterCreateNewGroup.value = false
+  // 清理之前的事件监听
+  EventsOff('agent-message')
+}
+
+// 解析AI返回的股票数据
+function parseAIStockData(content) {
+  const stocks = []
+  const seenCodes = new Set()
+  
+  // 方法1: 从markdown表格中解析
+  const tableRegex = /```[\s\S]*?\|[\s\S]*?股票代码[\s\S]*?\|[\s\S]*?股票名称[\s\S]*?\|([\s\S]*?)```/i
+  const tableMatch = content.match(tableRegex)
+  if (tableMatch) {
+    const tableContent = tableMatch[1]
+    const rows = tableContent.split('\n').filter(row => row.trim() && row.includes('|'))
+    
+    rows.forEach(row => {
+      const cells = row.split('|').map(c => c.trim()).filter(c => c && c !== '---')
+      if (cells.length >= 2) {
+        // 查找股票代码（6位数字）
+        const codeIndex = cells.findIndex(c => /^\d{6}$/.test(c))
+        if (codeIndex >= 0) {
+          const code = cells[codeIndex]
+          // 名称通常在代码的下一列
+          const nameIndex = codeIndex + 1
+          const name = nameIndex < cells.length ? cells[nameIndex] : code
+          
+          if (!seenCodes.has(code)) {
+            seenCodes.add(code)
+            stocks.push({ code, name: name || code })
+          }
+        }
+      }
+    })
+  }
+  
+  // 方法2: 如果没有从表格中找到，尝试直接匹配6位数字代码
+  if (stocks.length === 0) {
+    const codeMatches = content.match(/\b\d{6}\b/g)
+    if (codeMatches) {
+      const lines = content.split('\n')
+      codeMatches.forEach(code => {
+        if (!seenCodes.has(code)) {
+          seenCodes.add(code)
+          // 查找包含该代码的行
+          const line = lines.find(l => l.includes(code))
+          let name = code
+          if (line) {
+            // 尝试提取股票名称（在代码后面，去除特殊字符）
+            const parts = line.split(code)
+            if (parts.length > 1) {
+              const afterCode = parts[1].replace(/[|\s\-_*`]+/g, ' ').trim()
+              const nameParts = afterCode.split(/\s+/)
+              if (nameParts.length > 0 && nameParts[0]) {
+                name = nameParts[0]
+              }
+            }
+          }
+          stocks.push({ code, name })
+        }
+      })
+    }
+  }
+  
+  return stocks
+}
+
+// 执行AI筛选
+function executeAIFilter() {
+  if (!aiFilterCondition.value.trim()) {
+    message.warning('请输入筛选条件')
+    return
+  }
+  
+  aiFilterLoading.value = true
+  aiFilterResult.value = ''
+  aiFilterStocks.value = []
+  
+  // 监听AI消息
+  const messageHandler = (msg) => {
+    if (msg.role === 'assistant') {
+      if (msg.content) {
+        aiFilterResult.value += msg.content
+      }
+      if (msg.tool_calls) {
+        // 如果有工具调用，说明AI正在使用选股工具
+        for (const tool of msg.tool_calls) {
+          if (tool.function && tool.function.name === 'ChoiceStockByIndicators') {
+            // AI正在使用选股工具
+          }
+        }
+      }
+    }
+    if (msg.response_meta && msg.response_meta.finish_reason === 'stop') {
+      // AI完成，解析股票数据
+      aiFilterLoading.value = false
+      const stocks = parseAIStockData(aiFilterResult.value)
+      aiFilterStocks.value = stocks
+      if (stocks.length > 0) {
+        message.success(`找到 ${stocks.length} 只符合条件的股票`)
+      } else {
+        message.warning('未找到符合条件的股票，请检查筛选条件')
+      }
+      EventsOff('agent-message')
+    }
+  }
+  
+  EventsOn('agent-message', messageHandler)
+  
+  // 构建提示词，让AI使用选股工具
+  const prompt = `请使用选股工具筛选符合以下条件的股票：${aiFilterCondition.value}。筛选完成后，请以表格形式列出所有符合条件的股票代码和股票名称。`
+  
+  // 调用AI
+  ChatWithAgent(prompt, data.aiConfigId, data.sysPromptId).catch(err => {
+    aiFilterLoading.value = false
+    message.error('AI筛选失败：' + err)
+    EventsOff('agent-message')
+  })
+}
+
+// 将筛选出的股票添加到分组
+function addFilteredStocksToGroup() {
+  if (aiFilterStocks.value.length === 0) {
+    message.warning('没有可添加的股票')
+    return
+  }
+  
+  let targetGroupId = aiFilterGroupId.value
+  
+  // 如果需要创建新分组
+  if (aiFilterCreateNewGroup.value) {
+    if (!aiFilterGroupName.value.trim()) {
+      message.warning('请输入分组名称')
+      return
+    }
+    // 创建新分组
+    const maxSort = groupList.value.length > 0 
+      ? Math.max(...groupList.value.map(g => g.sort)) + 1 
+      : 1
+    AddGroup({
+      name: aiFilterGroupName.value,
+      sort: maxSort
+    }).then(result => {
+      message.info(result)
+      GetGroupList().then(result => {
+        groupList.value = result
+        // 获取新创建的分组ID
+        const newGroup = result.find(g => g.name === aiFilterGroupName.value)
+        if (newGroup) {
+          targetGroupId = newGroup.ID
+          addStocksToGroup(targetGroupId)
+        }
+      })
+    })
+  } else {
+    if (!targetGroupId) {
+      message.warning('请选择分组')
+      return
+    }
+    addStocksToGroup(targetGroupId)
+  }
+}
+
+// 添加股票到分组
+function addStocksToGroup(groupId) {
+  let successCount = 0
+  let failCount = 0
+  
+  const addStock = (index) => {
+    if (index >= aiFilterStocks.value.length) {
+      if (successCount > 0) {
+        message.success(`成功添加 ${successCount} 只股票到分组${failCount > 0 ? `，失败 ${failCount} 只` : ''}`)
+      } else {
+        message.warning(`添加失败，共 ${failCount} 只股票`)
+      }
+      modalShow6.value = false
+      // 刷新分组列表
+      GetGroupList().then(result => {
+        groupList.value = result
+      })
+      return
+    }
+    
+    const stock = aiFilterStocks.value[index]
+    // 转换股票代码格式
+    let code = stock.code.trim()
+    
+    // 如果是6位数字的A股代码，需要根据代码判断市场
+    if (/^\d{6}$/.test(code)) {
+      const firstDigit = code[0]
+      // 6开头是上海，0/3开头是深圳
+      if (firstDigit === '6') {
+        code = 'sh' + code
+      } else if (firstDigit === '0' || firstDigit === '3') {
+        code = 'sz' + code
+      }
+      // 其他情况保持原样
+    }
+    
+    AddStockGroup(groupId, code).then(result => {
+      if (result === '添加成功') {
+        successCount++
+      } else {
+        failCount++
+      }
+      addStock(index + 1)
+    }).catch(() => {
+      failCount++
+      addStock(index + 1)
+    })
+  }
+  
+  addStock(0)
 }
 
 function updateTab(name) {
@@ -2021,6 +2263,14 @@ function handleMoreAction(key, result) {
       </n-gradient-text>
     </template>
   </vue-danmaku>
+  <n-flex justify="space-between" style="margin-bottom: 10px;--wails-draggable:no-drag" v-if="data.openAiEnable">
+    <n-button type="primary" @click="openAIFilterStock">
+      <template #icon>
+        <n-icon :component="ChatboxOutline"/>
+      </template>
+      AI条件过滤选股
+    </n-button>
+  </n-flex>
   <n-tabs type="card" style="--wails-draggable:no-drag" animated addable :data-currentGroupId="currentGroupId"
           :value="String(currentGroupId)" @add="addTab" @update:value="updateTab" placement="top" @close="(key)=>{delTab(key)}">
 
@@ -2489,6 +2739,86 @@ function handleMoreAction(key, result) {
   <n-modal v-model:show="modalShow5" :title="data.name+'资金趋势'" style="width: 1000px" :preset="'card'">
     <money-trend :code="data.code" :name="data.name" :days="360" :dark-theme="data.darkTheme"
                  :chart-height="500"></money-trend>
+  </n-modal>
+
+  <!-- AI条件过滤选股对话框 -->
+  <n-modal v-model:show="modalShow6" title="AI条件过滤选股" style="width: 800px" :preset="'card'"
+           @after-leave="() => { EventsOff('agent-message') }">
+    <n-spin :show="aiFilterLoading">
+      <n-form label-placement="left" label-width="100px">
+        <n-form-item label="筛选条件">
+          <n-input
+            v-model:value="aiFilterCondition"
+            type="textarea"
+            placeholder="请输入筛选条件，例如：市盈率小于20，市值大于100亿，近5日涨幅大于5%"
+            :rows="3"
+            :disabled="aiFilterLoading"
+          />
+        </n-form-item>
+        <n-form-item>
+          <n-button type="primary" @click="executeAIFilter" :loading="aiFilterLoading" :disabled="!aiFilterCondition.trim()">
+            开始筛选
+          </n-button>
+        </n-form-item>
+        
+        <n-form-item v-if="aiFilterResult" label="AI分析结果">
+          <div style="max-height: 200px; overflow-y: auto; padding: 10px; background: var(--n-color); border-radius: 4px;">
+            <n-text>{{ aiFilterResult }}</n-text>
+          </div>
+        </n-form-item>
+        
+        <n-form-item v-if="aiFilterStocks.length > 0" label="筛选结果">
+          <div style="max-height: 150px; overflow-y: auto;">
+            <n-tag
+              v-for="stock in aiFilterStocks"
+              :key="stock.code"
+              style="margin: 4px;"
+              type="info"
+            >
+              {{ stock.code }} - {{ stock.name }}
+            </n-tag>
+          </div>
+          <n-text type="info" style="display: block; margin-top: 8px;">
+            共找到 {{ aiFilterStocks.length }} 只符合条件的股票
+          </n-text>
+        </n-form-item>
+        
+        <n-form-item v-if="aiFilterStocks.length > 0" label="添加到分组">
+          <n-radio-group v-model:value="aiFilterCreateNewGroup">
+            <n-radio :value="false">使用现有分组</n-radio>
+            <n-radio :value="true">创建新分组</n-radio>
+          </n-radio-group>
+        </n-form-item>
+        
+        <n-form-item v-if="aiFilterStocks.length > 0 && !aiFilterCreateNewGroup" label="选择分组">
+          <n-select
+            v-model:value="aiFilterGroupId"
+            :options="groupList.map(g => ({ label: g.name, value: g.ID }))"
+            placeholder="请选择分组"
+          />
+        </n-form-item>
+        
+        <n-form-item v-if="aiFilterStocks.length > 0 && aiFilterCreateNewGroup" label="新分组名称">
+          <n-input
+            v-model:value="aiFilterGroupName"
+            placeholder="请输入分组名称"
+          />
+        </n-form-item>
+      </n-form>
+      
+      <template #footer>
+        <n-flex justify="space-between">
+          <n-button @click="modalShow6 = false">取消</n-button>
+          <n-button
+            type="primary"
+            @click="addFilteredStocksToGroup"
+            :disabled="aiFilterStocks.length === 0 || (!aiFilterCreateNewGroup && !aiFilterGroupId) || (aiFilterCreateNewGroup && !aiFilterGroupName.trim())"
+          >
+            添加到分组
+          </n-button>
+        </n-flex>
+      </template>
+    </n-spin>
   </n-modal>
 </template>
 
