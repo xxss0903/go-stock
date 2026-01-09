@@ -2233,6 +2233,65 @@ function parseStocksFromAiResult(content) {
   return stocks
 }
 
+// 使用AI生成分组名称（从选股结果中提取或根据条件生成）
+function generateGroupNameByAI(stocks, condition, aiResult) {
+  // 方法1: 尝试从AI返回结果中提取分组名称建议
+  if (aiResult) {
+    // 查找类似"分组名称"、"建议名称"等关键词
+    const namePatterns = [
+      /分组名称[：:：]\s*([^\n]{2,10})/,
+      /建议名称[：:：]\s*([^\n]{2,10})/,
+      /推荐名称[：:：]\s*([^\n]{2,10})/,
+      /名称[：:：]\s*([^\n]{2,10})/,
+    ]
+    
+    for (const pattern of namePatterns) {
+      const match = aiResult.match(pattern)
+      if (match && match[1]) {
+        let name = match[1].trim().replace(/[：:：\s]+/g, '').substring(0, 10)
+        if (name.length >= 2) {
+          return name
+        }
+      }
+    }
+  }
+  
+  // 方法2: 根据选股条件智能生成名称
+  let groupName = ''
+  const conditionLower = condition.toLowerCase()
+  
+  if (conditionLower.includes('市值最大') || conditionLower.includes('大市值')) {
+    const numMatch = condition.match(/(\d+)/)
+    groupName = numMatch ? `市值Top${numMatch[1]}` : '高市值股票'
+  } else if (conditionLower.includes('市值最小') || conditionLower.includes('小市值')) {
+    const numMatch = condition.match(/(\d+)/)
+    groupName = numMatch ? `小市值${numMatch[1]}只` : '小市值股票'
+  } else if (conditionLower.includes('市盈率') && (conditionLower.includes('小于') || conditionLower.includes('低于'))) {
+    groupName = '低估值股票'
+  } else if (conditionLower.includes('市盈率') && (conditionLower.includes('大于') || conditionLower.includes('高于'))) {
+    groupName = '高估值股票'
+  } else if (conditionLower.includes('涨幅') && (conditionLower.includes('最大') || conditionLower.includes('最高'))) {
+    const numMatch = condition.match(/(\d+)/)
+    groupName = numMatch ? `涨幅Top${numMatch[1]}` : '强势股票'
+  } else if (conditionLower.includes('跌幅') || conditionLower.includes('下跌')) {
+    groupName = '弱势股票'
+  } else if (conditionLower.includes('行业')) {
+    groupName = '行业精选'
+  } else if (conditionLower.includes('概念')) {
+    groupName = '概念板块'
+  } else if (conditionLower.includes('roe') || conditionLower.includes('净资产收益率')) {
+    groupName = '高ROE股票'
+  } else if (conditionLower.includes('营收') || conditionLower.includes('收入')) {
+    groupName = '高增长股票'
+  } else {
+    // 默认名称：根据股票数量
+    const stockCount = stocks.length
+    groupName = `AI选股${stockCount}只`
+  }
+  
+  return groupName || `AI选股-${new Date().toLocaleDateString()}`
+}
+
 // 添加解析出的股票到自选
 async function addParsedStocksToFollow(parsedStocks) {
   console.log('addParsedStocksToFollow 被调用，股票数量:', parsedStocks?.length)
@@ -2241,10 +2300,45 @@ async function addParsedStocksToFollow(parsedStocks) {
     return
   }
   
+  // 使用AI生成分组名称（从选股结果中提取或根据条件生成）
+  const groupName = generateGroupNameByAI(parsedStocks, aiStockSelectCondition.value, aiStockSelectResult.value)
+  console.log('生成的分组名称:', groupName)
+  
+  // 创建新分组
+  const maxSort = groupList.value.length > 0 
+    ? Math.max(...groupList.value.map(g => g.sort)) + 1 
+    : 1
+  
+  message.loading('正在创建分组...')
+  const createGroupResult = await AddGroup({
+    name: groupName,
+    sort: maxSort
+  })
+  message.destroyAll()
+  
+  if (!createGroupResult) {
+    message.error('创建分组失败')
+    return
+  }
+  
+  // 刷新分组列表并获取新创建的分组ID
+  const updatedGroups = await GetGroupList()
+  groupList.value = updatedGroups
+  const newGroup = updatedGroups.find(g => g.name === groupName && g.sort === maxSort)
+  if (!newGroup) {
+    message.error('无法找到新创建的分组')
+    return
+  }
+  
+  const newGroupId = newGroup.ID
+  console.log('新分组ID:', newGroupId, '分组名称:', groupName)
+  
   let successCount = 0
   let failCount = 0
   const failMessages = []
+  const addedStocks = [] // 记录成功添加的股票代码，用于后续刷新
   
+  // 添加股票到自选并分组
   for (const stock of parsedStocks) {
     try {
       let code = stock.code
@@ -2273,18 +2367,49 @@ async function addParsedStocksToFollow(parsedStocks) {
       }
       
       console.log('准备添加股票，代码:', code)
-      const result = await Follow(code)
-      console.log('Follow结果:', result, '代码:', code)
-      if (result === "关注成功") {
-        successCount++
-        // 更新stocks数组（这是组件中的ref）
-        if (!stocks.value.includes(code)) {
-          stocks.value.push(code)
+      
+      // 先添加到自选
+      const followResult = await Follow(code)
+      console.log('Follow结果:', followResult, '代码:', code)
+      
+      if (followResult === "关注成功") {
+        // 添加到分组
+        let groupCode = code
+        if (code.startsWith("gb_")) {
+          groupCode = "us" + code.replace("gb_", "").toLowerCase()
+        }
+        const groupResult = await AddStockGroup(newGroupId, groupCode)
+        console.log('AddStockGroup结果:', groupResult, '代码:', groupCode)
+        
+        if (groupResult === '添加成功' || groupResult === '已经关注了') {
+          successCount++
+          addedStocks.push(code)
+          // 更新stocks数组（这是组件中的ref）
+          if (!stocks.value.includes(code)) {
+            stocks.value.push(code)
+          }
+        } else {
+          failCount++
+          failMessages.push(`${stock.name || code}: ${groupResult}`)
+        }
+      } else if (followResult === "已经关注了") {
+        // 如果已经关注，也尝试添加到分组
+        let groupCode = code
+        if (code.startsWith("gb_")) {
+          groupCode = "us" + code.replace("gb_", "").toLowerCase()
+        }
+        const groupResult = await AddStockGroup(newGroupId, groupCode)
+        if (groupResult === '添加成功' || groupResult === '已经关注了') {
+          successCount++
+          addedStocks.push(code)
+        } else {
+          failCount++
+          failMessages.push(`${stock.name || code}: ${groupResult}`)
         }
       } else {
         failCount++
-        failMessages.push(`${stock.name || code}: ${result}`)
-        console.warn('添加股票失败:', code, result)
+        failMessages.push(`${stock.name || code}: ${followResult}`)
+        console.warn('添加股票失败:', code, followResult)
       }
     } catch (error) {
       failCount++
@@ -2293,8 +2418,13 @@ async function addParsedStocksToFollow(parsedStocks) {
     }
   }
   
-  // 刷新自选列表
-  GetFollowList(currentGroupId.value).then(result => {
+  // 刷新分组列表
+  await GetGroupList().then(result => {
+    groupList.value = result
+  })
+  
+  // 刷新自选列表并切换到新分组
+  await GetFollowList(newGroupId).then(result => {
     followList.value = result
     // 更新stocks数组
     stocks.value = []
@@ -2304,12 +2434,19 @@ async function addParsedStocksToFollow(parsedStocks) {
         code = "gb_" + code.replace("us", "").toLowerCase()
       }
       stocks.value.push(code)
+      // 获取股票数据
+      Greet(code).then(result => {
+        updateData(result)
+      })
     }
+    // 切换到新分组
+    currentGroupId.value = newGroupId
+    message.destroyAll()
   })
   
   // 显示结果
   if (successCount > 0) {
-    message.success(`成功添加 ${successCount} 只股票到自选${failCount > 0 ? `，失败 ${failCount} 只` : ''}`)
+    message.success(`成功添加 ${successCount} 只股票到分组"${groupName}"${failCount > 0 ? `，失败 ${failCount} 只` : ''}`)
     if (failCount > 0 && failMessages.length > 0) {
       console.warn('添加失败的股票:', failMessages)
     }
