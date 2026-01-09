@@ -423,18 +423,53 @@ onBeforeMount(() => {
     }
   })
 
-  // 监听市场行情的AI总结事件
+  // 监听市场行情的AI总结事件（股票自选AI对话）
   EventsOn("summaryStockNews", async (msg) => {
     aiSummaryLoading.value = false
     if (msg === "DONE") {
       await SaveAIResponseResult("股票自选", "股票自选", aiSummary.value, aiSummaryChatId.value, aiSummaryQuestion.value, aiSummaryConfigId.value)
+      
+      // 显示完成通知
       message.info("AI分析完成！")
       message.destroyAll()
+      
+      // 显示更详细的通知
+      notify.success({
+        avatar: () =>
+          h(NAvatar, {
+            size: 'small',
+            round: false,
+            src: icon.value
+          }),
+        title: 'AI分析完成',
+        content: `股票自选AI分析已完成！\n问题：${aiSummaryQuestion.value || '未设置'}\n模型：${aiSummaryModelName.value || '未知'}\n结果已保存，可在对话框中查看。`,
+        duration: 5000,
+        meta: () => h('div', {
+          style: {
+            'font-size': '12px',
+            'color': 'var(--n-text-color-2)',
+            'margin-top': '8px'
+          }
+        }, {default: () => `分析时间：${aiSummaryTime.value || new Date().toLocaleString()}`})
+      })
     } else {
       // 检查是否是错误消息 (code === 0 表示错误)
       if (msg.code === 0 && msg.content) {
         message.error("AI分析出错，请查看下方错误信息")
         aiSummary.value = aiSummary.value + "\n\n" + msg.content
+        
+        // 显示错误通知
+        notify.error({
+          avatar: () =>
+            h(NAvatar, {
+              size: 'small',
+              round: false,
+              src: icon.value
+            }),
+          title: 'AI分析出错',
+          content: msg.content || '分析过程中发生错误，请查看详细信息',
+          duration: 5000,
+        })
         return
       }
       if (msg.chatId) {
