@@ -2127,7 +2127,7 @@ function handleMoreAction(key, result) {
                 <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
                 <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
                   {{
-                  "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                    "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
                   }}
                 </n-tag>
               </n-flex>
@@ -2264,7 +2264,7 @@ function handleMoreAction(key, result) {
                 <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
                 <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
                   {{
-                  "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                    "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
                   }}
                 </n-tag>
               </n-flex>
