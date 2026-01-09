@@ -119,6 +119,7 @@ const modalShow3 = ref(false)
 const modalShow4 = ref(false)
 const modalShow5 = ref(false)
 const summaryModal = ref(false) // AI总结对话框
+const aiStockSelectModal = ref(false) // AI选股对话框
 const addBTN = ref(true)
 const enableTools = ref(false)
 const thinkingMode = ref(false)
@@ -146,6 +147,17 @@ const aiSummaryQuestion = ref('')
 const aiSummaryConfigId = ref(null)
 const aiSummarySysPromptId = ref(null)
 const aiSummaryLoading = ref(false)
+
+// AI选股相关状态
+const aiStockSelectCondition = ref('') // 选股条件
+const aiStockSelectResult = ref('') // AI选股结果
+const aiStockSelectLoading = ref(false) // 加载状态
+const aiStockSelectConfigId = ref(null) // AI配置ID
+const aiStockSelectSysPromptId = ref(null) // 系统提示词ID
+const aiStockSelectChatId = ref('') // 对话ID
+const aiStockSelectModelName = ref('') // 模型名称
+const aiStockSelectTime = ref('') // 时间
+const isAiStockSelectMode = ref(false) // 标志：是否是AI选股模式
 const data = reactive({
   modelName: "",
   chatId: "",
@@ -356,9 +368,10 @@ onBeforeMount(() => {
   GetAiConfigs().then(res => {
     aiConfigs.value = res
     data.aiConfigId = res[0].ID
-    // 初始化AI总结的配置
+    // 初始化AI总结和AI选股的配置
     if (res.length > 0) {
       aiSummaryConfigId.value = res[0].ID
+      aiStockSelectConfigId.value = res[0].ID
     }
   })
 
@@ -423,72 +436,159 @@ onBeforeMount(() => {
     }
   })
 
-  // 监听市场行情的AI总结事件（股票自选AI对话）
+  // 监听市场行情的AI总结事件（股票自选AI对话和AI选股）
   EventsOn("summaryStockNews", async (msg) => {
-    aiSummaryLoading.value = false
-    if (msg === "DONE") {
-      await SaveAIResponseResult("股票自选", "股票自选", aiSummary.value, aiSummaryChatId.value, aiSummaryQuestion.value, aiSummaryConfigId.value)
-      
-      // 显示完成通知
-      message.info("AI分析完成！")
-      message.destroyAll()
-      
-      // 显示更详细的通知
-      notify.success({
-        avatar: () =>
-          h(NAvatar, {
-            size: 'small',
-            round: false,
-            src: icon.value
-          }),
-        title: 'AI分析完成',
-        content: `股票自选AI分析已完成！\n问题：${aiSummaryQuestion.value || '未设置'}\n模型：${aiSummaryModelName.value || '未知'}\n结果已保存，可在对话框中查看。`,
-        duration: 5000,
-        meta: () => h('div', {
-          style: {
-            'font-size': '12px',
-            'color': 'var(--n-text-color-2)',
-            'margin-top': '8px'
-          }
-        }, {default: () => `分析时间：${aiSummaryTime.value || new Date().toLocaleString()}`})
-      })
-    } else {
-      // 检查是否是错误消息 (code === 0 表示错误)
-      if (msg.code === 0 && msg.content) {
-        message.error("AI分析出错，请查看下方错误信息")
-        aiSummary.value = aiSummary.value + "\n\n" + msg.content
+    // 使用标志变量判断是AI选股模式还是AI总结模式
+    const isStockSelectMode = isAiStockSelectMode.value
+    
+    console.log('summaryStockNews事件:', {
+      isStockSelectMode,
+      flag: isAiStockSelectMode.value,
+      modalOpen: aiStockSelectModal.value,
+      loading: aiStockSelectLoading.value,
+      msg: msg === "DONE" ? "DONE" : typeof msg,
+      hasResult: aiStockSelectResult.value?.length > 0
+    })
+    
+    if (isStockSelectMode) {
+      // AI选股模式
+      if (msg === "DONE") {
+        aiStockSelectLoading.value = false
+        await SaveAIResponseResult("股票自选-选股", "股票自选-选股", aiStockSelectResult.value, aiStockSelectChatId.value, aiStockSelectCondition.value, aiStockSelectConfigId.value)
         
-        // 显示错误通知
-        notify.error({
+        // 解析股票数据并添加到自选
+        console.log('AI选股结果:', aiStockSelectResult.value)
+        const stocks = parseStocksFromAiResult(aiStockSelectResult.value)
+        console.log('解析出的股票:', stocks)
+        if (stocks.length > 0) {
+          console.log('开始添加股票到自选，数量:', stocks.length)
+          await addParsedStocksToFollow(stocks)
+        } else {
+          console.warn('未找到股票数据，AI返回内容:', aiStockSelectResult.value)
+          message.warning('未在AI返回结果中找到股票数据，请检查AI返回的JSON格式。AI返回内容已显示在对话框中。')
+        }
+        
+        // 重置标志
+        isAiStockSelectMode.value = false
+        
+        // 显示完成通知
+        message.info("AI选股完成！")
+        message.destroyAll()
+        
+        notify.success({
           avatar: () =>
             h(NAvatar, {
               size: 'small',
               round: false,
               src: icon.value
             }),
-          title: 'AI分析出错',
-          content: msg.content || '分析过程中发生错误，请查看详细信息',
+          title: 'AI选股完成',
+          content: `选股条件：${aiStockSelectCondition.value}\n模型：${aiStockSelectModelName.value || '未知'}\n已解析并添加股票到自选。`,
           duration: 5000,
         })
-        return
+      } else {
+        // 检查是否是错误消息
+        if (msg.code === 0 && msg.content) {
+          aiStockSelectLoading.value = false
+          isAiStockSelectMode.value = false // 重置标志
+          message.error("AI选股出错，请查看下方错误信息")
+          aiStockSelectResult.value = aiStockSelectResult.value + "\n\n" + msg.content
+          notify.error({
+            avatar: () =>
+              h(NAvatar, {
+                size: 'small',
+                round: false,
+                src: icon.value
+              }),
+            title: 'AI选股出错',
+            content: msg.content || '选股过程中发生错误',
+            duration: 5000,
+          })
+          return
+        }
+        if (msg.chatId) {
+          aiStockSelectChatId.value = msg.chatId
+        }
+        if (msg.content) {
+          aiStockSelectResult.value = aiStockSelectResult.value + msg.content
+        }
+        if (msg.extraContent) {
+          aiStockSelectResult.value = aiStockSelectResult.value + msg.extraContent
+        }
+        if (msg.model) {
+          aiStockSelectModelName.value = msg.model
+        }
+        if (msg.time) {
+          aiStockSelectTime.value = msg.time
+        }
       }
-      if (msg.chatId) {
-        aiSummaryChatId.value = msg.chatId
-      }
-      if (msg.question) {
-        aiSummaryQuestion.value = msg.question
-      }
-      if (msg.content) {
-        aiSummary.value = aiSummary.value + msg.content
-      }
-      if (msg.extraContent) {
-        aiSummary.value = aiSummary.value + msg.extraContent
-      }
-      if (msg.model) {
-        aiSummaryModelName.value = msg.model
-      }
-      if (msg.time) {
-        aiSummaryTime.value = msg.time
+    } else {
+      // AI总结模式
+      aiSummaryLoading.value = false
+      if (msg === "DONE") {
+        await SaveAIResponseResult("股票自选", "股票自选", aiSummary.value, aiSummaryChatId.value, aiSummaryQuestion.value, aiSummaryConfigId.value)
+        
+        // 显示完成通知
+        message.info("AI分析完成！")
+        message.destroyAll()
+        
+        // 显示更详细的通知
+        notify.success({
+          avatar: () =>
+            h(NAvatar, {
+              size: 'small',
+              round: false,
+              src: icon.value
+            }),
+          title: 'AI分析完成',
+          content: `股票自选AI分析已完成！\n问题：${aiSummaryQuestion.value || '未设置'}\n模型：${aiSummaryModelName.value || '未知'}\n结果已保存，可在对话框中查看。`,
+          duration: 5000,
+          meta: () => h('div', {
+            style: {
+              'font-size': '12px',
+              'color': 'var(--n-text-color-2)',
+              'margin-top': '8px'
+            }
+          }, {default: () => `分析时间：${aiSummaryTime.value || new Date().toLocaleString()}`})
+        })
+      } else {
+        // 检查是否是错误消息 (code === 0 表示错误)
+        if (msg.code === 0 && msg.content) {
+          message.error("AI分析出错，请查看下方错误信息")
+          aiSummary.value = aiSummary.value + "\n\n" + msg.content
+          
+          // 显示错误通知
+          notify.error({
+            avatar: () =>
+              h(NAvatar, {
+                size: 'small',
+                round: false,
+                src: icon.value
+              }),
+            title: 'AI分析出错',
+            content: msg.content || '分析过程中发生错误，请查看详细信息',
+            duration: 5000,
+          })
+          return
+        }
+        if (msg.chatId) {
+          aiSummaryChatId.value = msg.chatId
+        }
+        if (msg.question) {
+          aiSummaryQuestion.value = msg.question
+        }
+        if (msg.content) {
+          aiSummary.value = aiSummary.value + msg.content
+        }
+        if (msg.extraContent) {
+          aiSummary.value = aiSummary.value + msg.extraContent
+        }
+        if (msg.model) {
+          aiSummaryModelName.value = msg.model
+        }
+        if (msg.time) {
+          aiSummaryTime.value = msg.time
+        }
       }
     }
   })
@@ -2008,6 +2108,219 @@ function shareAiSummary() {
   })
 }
 
+// AI选股相关函数
+function openAiStockSelect() {
+  aiStockSelectModal.value = true
+  aiStockSelectCondition.value = ''
+  aiStockSelectResult.value = ''
+  aiStockSelectLoading.value = false
+  aiStockSelectChatId.value = ''
+  aiStockSelectModelName.value = ''
+  aiStockSelectTime.value = ''
+  isAiStockSelectMode.value = false // 重置标志
+  // 初始化AI配置
+  if (aiConfigs.value.length > 0) {
+    aiStockSelectConfigId.value = data.aiConfigId || aiConfigs.value[0].ID
+  }
+  aiStockSelectSysPromptId.value = data.sysPromptId
+}
+
+// 执行AI选股
+function executeAiStockSelect() {
+  if (!aiStockSelectCondition.value.trim()) {
+    message.warning('请输入选股条件')
+    return
+  }
+  
+  if (!aiStockSelectConfigId.value) {
+    message.warning('请选择AI模型配置')
+    return
+  }
+  
+  // 确保对话框打开
+  aiStockSelectModal.value = true
+  aiStockSelectLoading.value = true
+  aiStockSelectResult.value = ''
+  aiStockSelectChatId.value = ''
+  aiStockSelectModelName.value = ''
+  aiStockSelectTime.value = ''
+  isAiStockSelectMode.value = true // 设置标志为AI选股模式
+  
+  // 构建选股prompt
+  const stockSelectPrompt = `请根据以下选股条件筛选股票：${aiStockSelectCondition.value}
+
+**重要要求：**
+1. 请使用可用的工具函数（如SearchStockByIndicators、GetStockKLine等）来获取股票数据
+2. 根据选股条件进行筛选和分析
+3. 在回复的最后，必须按照以下JSON格式返回筛选结果
+
+**返回格式（必须严格遵守）：**
+
+\`\`\`json
+{
+  "stocks": [
+    {
+      "code": "sh000001",
+      "name": "平安银行",
+      "market": "A股"
+    },
+    {
+      "code": "sz000002",
+      "name": "万科A",
+      "market": "A股"
+    }
+  ]
+}
+\`\`\`
+
+**格式要求：**
+1. 股票代码格式：
+   - A股：sh000001（上海）或 sz000001（深圳），代码必须是6位数字
+   - 港股：hk00700，代码必须是5位数字
+   - 美股：usAAPL 或 gb_aapl（小写）
+2. 股票名称必须是完整的中文名称（A股、港股）或英文名称（美股）
+3. market字段：A股、港股、美股
+4. 如果未找到符合条件的股票，返回：{"stocks": []}
+5. JSON格式必须正确，可以被解析
+6. JSON代码块必须放在回复的最后
+
+**工作流程：**
+1. 使用工具函数获取股票数据
+2. 根据选股条件筛选股票（如：市值最大的3个、市盈率小于20等）
+3. 在回复的最后提供JSON格式的筛选结果
+
+请开始筛选。`
+
+  // 调用AI分析
+  SummaryStockNews(stockSelectPrompt, aiStockSelectConfigId.value, aiStockSelectSysPromptId.value, enableTools.value, thinkingMode.value)
+}
+
+// 从AI结果中解析股票JSON数据
+function parseStocksFromAiResult(content) {
+  const stocks = []
+  try {
+    // 方法1: 尝试从JSON代码块中解析
+    const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/i
+    const jsonMatch = content.match(jsonBlockRegex)
+    if (jsonMatch) {
+      const jsonStr = jsonMatch[1].trim()
+      const data = JSON.parse(jsonStr)
+      if (data.stocks && Array.isArray(data.stocks)) {
+        return data.stocks
+      }
+    }
+    
+    // 方法2: 尝试直接查找JSON对象（不在代码块中）
+    const jsonObjRegex = /\{\s*"stocks"\s*:\s*\[([\s\S]*?)\]\s*\}/i
+    const jsonObjMatch = content.match(jsonObjRegex)
+    if (jsonObjMatch) {
+      // 尝试提取完整的JSON
+      const jsonStart = content.lastIndexOf('{')
+      const jsonEnd = content.lastIndexOf('}') + 1
+      if (jsonStart >= 0 && jsonEnd > jsonStart) {
+        const jsonStr = content.substring(jsonStart, jsonEnd)
+        const data = JSON.parse(jsonStr)
+        if (data.stocks && Array.isArray(data.stocks)) {
+          return data.stocks
+        }
+      }
+    }
+  } catch (error) {
+    console.error('解析股票数据失败:', error)
+    message.error('解析股票数据失败，请检查AI返回的格式')
+  }
+  
+  return stocks
+}
+
+// 添加解析出的股票到自选
+async function addParsedStocksToFollow(parsedStocks) {
+  console.log('addParsedStocksToFollow 被调用，股票数量:', parsedStocks?.length)
+  if (!parsedStocks || parsedStocks.length === 0) {
+    message.warning('未找到符合条件的股票')
+    return
+  }
+  
+  let successCount = 0
+  let failCount = 0
+  const failMessages = []
+  
+  for (const stock of parsedStocks) {
+    try {
+      let code = stock.code
+      if (!code) {
+        console.warn('股票数据缺少code字段:', stock)
+        failCount++
+        continue
+      }
+      
+      // 转换股票代码格式
+      code = code.trim().toLowerCase()
+      console.log('处理股票代码:', code, '原始数据:', stock)
+      
+      // 如果是6位数字的A股代码，需要根据代码判断市场
+      if (/^\d{6}$/.test(code)) {
+        const firstDigit = code[0]
+        // 6开头是上海，0/3开头是深圳
+        if (firstDigit === '6') {
+          code = 'sh' + code
+        } else if (firstDigit === '0' || firstDigit === '3') {
+          code = 'sz' + code
+        }
+      } else if (code.startsWith('gb_')) {
+        // 美股gb_格式转换为us格式
+        code = 'us' + code.replace('gb_', '').toUpperCase()
+      }
+      
+      console.log('准备添加股票，代码:', code)
+      const result = await Follow(code)
+      console.log('Follow结果:', result, '代码:', code)
+      if (result === "关注成功") {
+        successCount++
+        // 更新stocks数组（这是组件中的ref）
+        if (!stocks.value.includes(code)) {
+          stocks.value.push(code)
+        }
+      } else {
+        failCount++
+        failMessages.push(`${stock.name || code}: ${result}`)
+        console.warn('添加股票失败:', code, result)
+      }
+    } catch (error) {
+      failCount++
+      failMessages.push(`${stock.name || stock.code}: ${error.message}`)
+      console.error('添加股票异常:', stock, error)
+    }
+  }
+  
+  // 刷新自选列表
+  GetFollowList(currentGroupId.value).then(result => {
+    followList.value = result
+    // 更新stocks数组
+    stocks.value = []
+    for (const followedStock of result) {
+      let code = followedStock.StockCode
+      if (code.startsWith("us")) {
+        code = "gb_" + code.replace("us", "").toLowerCase()
+      }
+      stocks.value.push(code)
+    }
+  })
+  
+  // 显示结果
+  if (successCount > 0) {
+    message.success(`成功添加 ${successCount} 只股票到自选${failCount > 0 ? `，失败 ${failCount} 只` : ''}`)
+    if (failCount > 0 && failMessages.length > 0) {
+      console.warn('添加失败的股票:', failMessages)
+    }
+  } else {
+    message.warning(`添加失败，共 ${failCount} 只股票`)
+    if (failMessages.length > 0) {
+      message.error(failMessages.join('; '))
+    }
+  }
+}
+
 function addTab() {
   addTabPane.value = true
 }
@@ -2727,6 +3040,73 @@ function handleMoreAction(key, result) {
       </n-button>
     </n-input-group>
   </div>
+
+  <!-- AI选股按钮 -->
+  <div style="position: fixed;bottom: 122px;right:5px;z-index: 10;" v-if="data.openAiEnable">
+    <n-input-group>
+      <n-button type="warning" @click="openAiStockSelect">
+        <n-icon :component="ChatboxOutline"/> &nbsp;AI选股
+      </n-button>
+    </n-input-group>
+  </div>
+
+  <!-- AI选股对话框 -->
+  <n-modal transform-origin="center" v-model:show="aiStockSelectModal" preset="card" style="width: 800px;"
+           :title="'AI智能选股'"
+           @after-leave="() => { isAiStockSelectMode.value = false; aiStockSelectLoading.value = false }">
+    <n-spin size="small" :show="aiStockSelectLoading">
+      <MdPreview style="height: 440px;text-align: left" :modelValue="aiStockSelectResult || (aiStockSelectLoading ? '正在分析中，请稍候...' : '')" :theme="theme"/>
+    </n-spin>
+    <template #footer>
+      <n-flex justify="space-between">
+        <n-text type="info" v-if="aiStockSelectTime">
+          <n-tag v-if="aiStockSelectModelName" type="warning" round :title="aiStockSelectChatId" :bordered="false">{{ aiStockSelectModelName }}</n-tag>
+          {{ aiStockSelectTime }}
+        </n-text>
+        <n-text type="error">*AI选股结果仅供参考，请以实际行情为准。投资需谨慎，风险自担。</n-text>
+      </n-flex>
+    </template>
+    <template #action>
+      <n-flex justify="left" style="margin-bottom: 10px">
+        <n-switch v-model:value="enableTools" :round="false">
+          <template #checked>
+            启用AI函数工具调用
+          </template>
+          <template #unchecked>
+            不启用AI函数工具调用
+          </template>
+        </n-switch>
+        <n-switch v-model:value="thinkingMode" :round="false">
+          <template #checked>
+            启用思考模式
+          </template>
+          <template #unchecked>
+            不启用思考模式
+          </template>
+        </n-switch>
+        <n-gradient-text type="error" style="margin-left: 10px">*AI函数工具调用可以增强AI获取数据的能力,但会消耗更多tokens。</n-gradient-text>
+      </n-flex>
+      <n-flex justify="space-between" style="margin-bottom: 10px">
+        <n-select style="width: 32%" v-model:value="aiStockSelectConfigId" label-field="name" value-field="ID"
+                  :options="aiConfigs" placeholder="请选择AI模型服务配置"/>
+        <n-select style="width: 32%" v-model:value="aiStockSelectSysPromptId" label-field="name" value-field="ID"
+                  :options="sysPromptOptions" placeholder="请选择系统提示词"/>
+        <n-text style="width: 32%" type="info">选股完成后会自动解析并添加到自选</n-text>
+      </n-flex>
+      <n-flex justify="right">
+        <n-input v-model:value="aiStockSelectCondition" style="text-align: left" clearable
+                 type="textarea"
+                 :show-count="true"
+                 placeholder="请输入选股条件，例如：市值最大的3个股票、市盈率小于20且市值大于100亿的股票"
+                 :autosize="{
+              minRows: 2,
+              maxRows: 5
+            }"
+        />
+        <n-button size="tiny" type="warning" @click="executeAiStockSelect" :loading="aiStockSelectLoading" :disabled="!aiStockSelectCondition.trim() || !aiStockSelectConfigId">开始选股</n-button>
+      </n-flex>
+    </template>
+  </n-modal>
 </template>
 
 <style scoped>
