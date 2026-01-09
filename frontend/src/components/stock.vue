@@ -37,6 +37,7 @@ import {
 import {
   NAvatar,
   NButton,
+  NDropdown,
   NFlex,
   NForm,
   NFormItem,
@@ -1499,6 +1500,32 @@ function showK(code, name) {
   //https://image.sinajs.cn/newchart/hk_stock/daily/06030.gif?1740729404273
 }
 
+function showWeekK(code, name) {
+  data.code = code
+  data.name = name
+  data.kURL = 'http://image.sinajs.cn/newchart/weekly/n/' + data.code + '.gif' + "?t=" + Date.now()
+  if (code.startsWith('hk')) {
+    data.kURL = 'http://image.sinajs.cn/newchart/hk_stock/weekly/' + data.code.replace("hk", "") + '.gif' + "?t=" + Date.now()
+  }
+  if (code.startsWith('gb_')) {
+    data.kURL = 'http://image.sinajs.cn/newchart/usstock/weekly/' + data.code.replace("gb_", "") + '.gif' + "?t=" + Date.now()
+  }
+  modalShow3.value = true
+}
+
+function showMonthK(code, name) {
+  data.code = code
+  data.name = name
+  data.kURL = 'http://image.sinajs.cn/newchart/monthly/n/' + data.code + '.gif' + "?t=" + Date.now()
+  if (code.startsWith('hk')) {
+    data.kURL = 'http://image.sinajs.cn/newchart/hk_stock/monthly/' + data.code.replace("hk", "") + '.gif' + "?t=" + Date.now()
+  }
+  if (code.startsWith('gb_')) {
+    data.kURL = 'http://image.sinajs.cn/newchart/usstock/monthly/' + data.code.replace("gb_", "") + '.gif' + "?t=" + Date.now()
+  }
+  modalShow3.value = true
+}
+
 
 function updateCostPriceAndVolumeNew(code, price, volume, alarm, formModel) {
   if (formModel.sort) {
@@ -1907,6 +1934,81 @@ function searchStockReport(stockCode) {
     },
   })
 }
+
+// 获取更多操作的下拉菜单选项
+function getMoreOptions(result) {
+  const options = []
+  
+  // 成本
+  options.push({
+    label: '成本',
+    key: 'cost'
+  })
+  
+  // 资金（如果有买一报价）
+  if (result['买一报价'] > 0) {
+    options.push({
+      label: '资金',
+      key: 'money'
+    })
+  }
+  
+  // 详情
+  options.push({
+    label: '详情',
+    key: 'detail'
+  })
+  
+  // 公告（如果有买一报价）
+  if (result['买一报价'] > 0) {
+    options.push({
+      label: '公告',
+      key: 'notice'
+    })
+  }
+  
+  // 研报（如果有买一报价）
+  if (result['买一报价'] > 0) {
+    options.push({
+      label: '研报',
+      key: 'report'
+    })
+  }
+  
+  // 设置分组 - 使用子菜单
+  const groupOptions = groupList.value.map(group => ({
+    label: group.name,
+    key: `group_${group.ID}`
+  }))
+  
+  if (groupOptions.length > 0) {
+    options.push({
+      label: '设置分组',
+      key: 'group',
+      children: groupOptions
+    })
+  }
+  
+  return options
+}
+
+// 处理更多操作的下拉菜单选择
+function handleMoreAction(key, result) {
+  if (key === 'cost') {
+    setStock(result['股票代码'], result['股票名称'])
+  } else if (key === 'money') {
+    showMoney(result['股票代码'], result['股票名称'])
+  } else if (key === 'detail') {
+    search(result['股票代码'], result['股票名称'])
+  } else if (key === 'notice') {
+    searchNotice(result['股票代码'])
+  } else if (key === 'report') {
+    searchStockReport(result['股票代码'])
+  } else if (key.startsWith('group_')) {
+    const groupId = parseInt(key.replace('group_', ''))
+    AddStockGroupInfo(groupId, result['股票代码'], result['股票名称'])
+  }
+}
 </script>
 
 <template>
@@ -2032,32 +2134,20 @@ function searchStockReport(stockCode) {
             </template>
             <template #action>
               <n-flex justify="left">
-                <n-button size="tiny" type="warning" @click="setStock(result['股票代码'],result['股票名称'])"> 成本
-                </n-button>
+                <!-- 常用功能：直接显示 -->
                 <n-button size="tiny" type="error"
                           @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)"> 分时
                 </n-button>
                 <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])"> 日K</n-button>
-                <n-button size="tiny" type="error" v-if="result['买一报价']>0"
-                          @click="showMoney(result['股票代码'],result['股票名称'])"> 资金
-                </n-button>
+                <n-button size="tiny" type="error" @click="showWeekK(result['股票代码'],result['股票名称'])"> 周K</n-button>
+                <n-button size="tiny" type="error" @click="showMonthK(result['股票代码'],result['股票名称'])"> 月K</n-button>
                 <n-button size="tiny" v-if="data.openAiEnable" type="warning" secondary
                           @click="aiCheckStock(result['股票名称'],result['股票代码'])"> AI分析
                 </n-button>
-                <n-button size="tiny" type="success" @click="search(result['股票代码'],result['股票名称'])"> 详情
-                </n-button>
-                <n-button v-if="result['买一报价']>0" size="tiny" type="success"
-                          @click="searchNotice(result['股票代码'])"> 公告
-                </n-button>
-                <n-button v-if="result['买一报价']>0" size="tiny" type="success"
-                          @click="searchStockReport(result['股票代码'])"> 研报
-                </n-button>
-                <n-flex justify="right">
-                  <n-dropdown trigger="click" :options="groupList" key-field="ID" label-field="name"
-                              @select="(groupId) => AddStockGroupInfo(groupId,result['股票代码'],result['股票名称'])">
-                    <n-button type="warning" size="tiny">设置分组</n-button>
-                  </n-dropdown>
-                </n-flex>
+                <!-- 其他功能：下拉菜单 -->
+                <n-dropdown trigger="click" :options="getMoreOptions(result)" @select="(key) => handleMoreAction(key, result)">
+                  <n-button size="tiny" type="info" secondary>更多</n-button>
+                </n-dropdown>
               </n-flex>
             </template>
           </n-card>
@@ -2181,32 +2271,20 @@ function searchStockReport(stockCode) {
             </template>
             <template #action>
               <n-flex justify="left">
-                <n-button size="tiny" type="warning" @click="setStock(result['股票代码'],result['股票名称'])"> 成本
-                </n-button>
+                <!-- 常用功能：直接显示 -->
                 <n-button size="tiny" type="error"
                           @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)"> 分时
                 </n-button>
                 <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])"> 日K</n-button>
-                <n-button size="tiny" type="error" v-if="result['买一报价']>0"
-                          @click="showMoney(result['股票代码'],result['股票名称'])"> 资金
-                </n-button>
+                <n-button size="tiny" type="error" @click="showWeekK(result['股票代码'],result['股票名称'])"> 周K</n-button>
+                <n-button size="tiny" type="error" @click="showMonthK(result['股票代码'],result['股票名称'])"> 月K</n-button>
                 <n-button size="tiny" v-if="data.openAiEnable" type="warning" secondary
                           @click="aiCheckStock(result['股票名称'],result['股票代码'])"> AI分析
                 </n-button>
-                <n-button size="tiny" type="success" @click="search(result['股票代码'],result['股票名称'])"> 详情
-                </n-button>
-                <n-button v-if="result['买一报价']>0" size="tiny" type="success"
-                          @click="searchNotice(result['股票代码'])"> 公告
-                </n-button>
-                <n-button v-if="result['买一报价']>0" size="tiny" type="success"
-                          @click="searchStockReport(result['股票代码'])"> 研报
-                </n-button>
-                <n-flex justify="right">
-                  <n-dropdown trigger="click" :options="groupList" key-field="ID" label-field="name"
-                              @select="(groupId) => AddStockGroupInfo(groupId,result['股票代码'],result['股票名称'])">
-                    <n-button type="warning" size="tiny">设置分组</n-button>
-                  </n-dropdown>
-                </n-flex>
+                <!-- 其他功能：下拉菜单 -->
+                <n-dropdown trigger="click" :options="getMoreOptions(result)" @select="(key) => handleMoreAction(key, result)">
+                  <n-button size="tiny" type="info" secondary>更多</n-button>
+                </n-dropdown>
               </n-flex>
             </template>
           </n-card>
