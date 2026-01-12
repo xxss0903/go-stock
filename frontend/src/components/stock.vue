@@ -26,6 +26,7 @@ import {
   SaveAsMarkdown,
   SaveImage,
   SaveWordFile,
+  SearchStock,
   SendDingDingMessageByType,
   SetAlarmChangePercent,
   SetCostPriceAndVolume,
@@ -40,15 +41,21 @@ import {
 import {
   NAvatar,
   NButton,
+  NDataTable,
   NDropdown,
+  NEllipsis,
   NFlex,
   NForm,
   NFormItem,
   NGradientText,
   NIcon,
   NInput,
+  NInputGroup,
   NInputNumber,
+  NList,
+  NListItem,
   NModal,
+  NScrollbar,
   NSelect,
   NSpin,
   NSwitch,
@@ -163,6 +170,16 @@ const aiStockSelectChatId = ref('') // 对话ID
 const aiStockSelectModelName = ref('') // 模型名称
 const aiStockSelectTime = ref('') // 时间
 const isAiStockSelectMode = ref(false) // 标志：是否是AI选股模式
+
+// 指标选股相关状态
+const indicatorStockSelectModal = ref(false) // 指标选股对话框
+const indicatorStockSelectCondition = ref('') // 选股条件
+const indicatorStockSelectLoading = ref(false) // 加载状态
+const indicatorStockSelectColumns = ref([]) // 表格列
+const indicatorStockSelectDataList = ref([]) // 股票数据列表
+const indicatorStockSelectTraceInfo = ref('') // 选股条件解析信息
+const indicatorStockSelectTableScrollX = ref(2800) // 表格滚动宽度
+
 const data = reactive({
   modelName: "",
   chatId: "",
@@ -2562,6 +2579,348 @@ function cancelEditGroup() {
   editingGroupName.value = ''
 }
 
+// 指标选股相关函数
+function openIndicatorStockSelect() {
+  indicatorStockSelectModal.value = true
+  indicatorStockSelectCondition.value = ''
+  indicatorStockSelectColumns.value = []
+  indicatorStockSelectDataList.value = []
+  indicatorStockSelectTraceInfo.value = ''
+  indicatorStockSelectLoading.value = false
+}
+
+// 计算表格总宽度
+function calculateIndicatorTableWidth(cols) {
+  let totalWidth = 0;
+  
+  cols.forEach(col => {
+    if (col.children && col.children.length > 0) {
+      // 有子列的情况
+      let childrenWidth = 0;
+      col.children.forEach(child => {
+        childrenWidth += child.width || child.minWidth || 100;
+      });
+      // 取标题列宽度和子列总宽度的较大值
+      totalWidth += Math.max(col.width || col.minWidth || 200, childrenWidth);
+    } else {
+      // 没有子列的情况
+      totalWidth += col.width || col.minWidth || 120;
+    }
+  });
+  
+  // 加上操作列的宽度
+  totalWidth += 100;
+  
+  return Math.max(totalWidth, 1200); // 最小宽度1200
+}
+
+// 判断是否为数字
+function isNumeric(value) {
+  return !isNaN(parseFloat(value)) && isFinite(value);
+}
+
+// 执行指标选股搜索
+function executeIndicatorStockSelect() {
+  if (!indicatorStockSelectCondition.value.trim()) {
+    message.warning('请输入选股指标或者要求')
+    return
+  }
+
+  indicatorStockSelectLoading.value = true
+  const loading = message.loading("正在获取选股数据...", {duration: 0});
+  
+  SearchStock(indicatorStockSelectCondition.value).then(res => {
+    loading.destroy()
+    indicatorStockSelectLoading.value = false
+    
+    if (res.code == 100) {
+      indicatorStockSelectTraceInfo.value = res.data.traceInfo.showText
+      
+      // 处理表格列
+      indicatorStockSelectColumns.value = res.data.result.columns
+        .filter(item => !item.hiddenNeed && (item.title != "市场码" && item.title != "市场简称"))
+        .map(item => {
+          if (item.children) {
+            return {
+              title: item.title + (item.unit ? '[' + item.unit + ']' : ''),
+              key: item.key,
+              resizable: true,
+              minWidth: 200,
+              ellipsis: {
+                tooltip: true
+              },
+              children: item.children.filter(item => !item.hiddenNeed).map(item => {
+                return {
+                  title: item.dateMsg,
+                  key: item.key,
+                  minWidth: 100,
+                  resizable: true,
+                  ellipsis: {
+                    tooltip: true
+                  },
+                  sorter: (row1, row2) => {
+                    if (isNumeric(row1[item.key]) && isNumeric(row2[item.key])) {
+                      return row1[item.key] - row2[item.key];
+                    } else {
+                      return 'default'
+                    }
+                  },
+                }
+              })
+            }
+          } else {
+            return {
+              title: item.title + (item.unit ? '[' + item.unit + ']' : ''),
+              key: item.key,
+              resizable: true,
+              minWidth: 120,
+              ellipsis: {
+                tooltip: true
+              },
+              sorter: (row1, row2) => {
+                if (isNumeric(row1[item.key]) && isNumeric(row2[item.key])) {
+                  return row1[item.key] - row2[item.key];
+                } else {
+                  return 'default'
+                }
+              },
+            }
+          }
+        })
+      
+      // 添加操作列
+      indicatorStockSelectColumns.value.push({
+        title: '操作',
+        key: 'actions',
+        width: 80,
+        fixed: 'right',
+        render: (row) => {
+          return h(
+            NButton,
+            {
+              strong: true,
+              tertiary: true,
+              size: 'small',
+              type: 'warning',
+              style: 'font-size: 14px; padding: 0 10px;',
+              onClick: () => handleIndicatorStockFollow(row)
+            },
+            { default: () => '关注' }
+          )
+        }
+      });
+      
+      indicatorStockSelectDataList.value = res.data.result.dataList
+      
+      // 计算并设置表格宽度
+      indicatorStockSelectTableScrollX.value = calculateIndicatorTableWidth(indicatorStockSelectColumns.value);
+      
+      message.success(`找到 ${indicatorStockSelectDataList.value.length} 只股票`)
+    } else {
+      if (res.msg) {
+        message.error(res.msg)
+      }
+      if (res.message) {
+        message.error(res.message)
+      }
+    }
+  }).catch(err => {
+    loading.destroy()
+    indicatorStockSelectLoading.value = false
+    message.error(err)
+  })
+}
+
+// 关注单个股票（指标选股）
+function handleIndicatorStockFollow(row) {
+  let code = row.MARKET_SHORT_NAME.toLowerCase() + row.SECURITY_CODE
+  Follow(code).then(result => {
+    if (result === "关注成功") {
+      message.success(result)
+    } else {
+      message.error(result)
+    }
+  });
+}
+
+// 一键关注全部（指标选股）
+async function followAllIndicatorStocks() {
+  if (!indicatorStockSelectDataList.value || indicatorStockSelectDataList.value.length === 0) {
+    message.warning('没有可关注的股票')
+    return
+  }
+  
+  const stocks = indicatorStockSelectDataList.value
+  const stockCount = stocks.length
+  
+  // 询问是否创建新分组
+  dialog.warning({
+    title: '一键关注全部',
+    content: `将关注 ${stockCount} 只股票。是否创建新分组来存放这些股票？`,
+    positiveText: '创建新分组',
+    negativeText: '添加到当前分组',
+    onPositiveClick: async () => {
+      await followAllStocksWithNewGroup(stocks)
+    },
+    onNegativeClick: async () => {
+      await followAllStocksToCurrentGroup(stocks)
+    }
+  })
+}
+
+// 创建新分组并添加所有股票
+async function followAllStocksWithNewGroup(stocks) {
+  // 生成分组名称
+  const conditionLower = indicatorStockSelectCondition.value.toLowerCase()
+  let groupName = '指标选股'
+  
+  if (conditionLower.includes('换手率')) {
+    groupName = '高换手率股票'
+  } else if (conditionLower.includes('量比')) {
+    groupName = '高量比股票'
+  } else if (conditionLower.includes('涨幅')) {
+    groupName = '强势股票'
+  } else if (conditionLower.includes('市盈率')) {
+    groupName = '低估值股票'
+  } else if (conditionLower.includes('roe') || conditionLower.includes('净资产收益率')) {
+    groupName = '高ROE股票'
+  } else {
+    groupName = `指标选股${stocks.length}只`
+  }
+  
+  // 创建新分组
+  const maxSort = groupList.value.length > 0 
+    ? Math.max(...groupList.value.map(g => g.sort)) + 1 
+    : 1
+  
+  message.loading('正在创建分组...')
+  const createGroupResult = await AddGroup({
+    name: groupName,
+    sort: maxSort
+  })
+  message.destroyAll()
+  
+  if (!createGroupResult) {
+    message.error('创建分组失败')
+    return
+  }
+  
+  // 刷新分组列表并获取新创建的分组ID
+  const updatedGroups = await GetGroupList()
+  groupList.value = updatedGroups
+  const newGroup = updatedGroups.find(g => g.name === groupName && g.sort === maxSort)
+  if (!newGroup) {
+    message.error('无法找到新创建的分组')
+    return
+  }
+  
+  const newGroupId = newGroup.ID
+  
+  // 批量添加股票
+  await batchAddStocksToGroup(stocks, newGroupId, groupName)
+}
+
+// 添加到当前分组
+async function followAllStocksToCurrentGroup(stocks) {
+  const groupId = currentGroupId.value
+  const groupName = groupId === 0 ? '全部' : groupList.value.find(g => g.ID === groupId)?.name || '当前分组'
+  
+  await batchAddStocksToGroup(stocks, groupId, groupName)
+}
+
+// 批量添加股票到分组
+async function batchAddStocksToGroup(stocks, groupId, groupName) {
+  let successCount = 0
+  let failCount = 0
+  const failMessages = []
+  
+  message.loading(`正在添加股票到分组"${groupName}"...`, { duration: 0 })
+  
+  for (const stock of stocks) {
+    try {
+      let code = stock.MARKET_SHORT_NAME.toLowerCase() + stock.SECURITY_CODE
+      
+      // 先关注股票
+      const followResult = await Follow(code)
+      
+      if (followResult === "关注成功" || followResult === "已经关注了") {
+        // 如果groupId不为0，添加到分组
+        if (groupId !== 0) {
+          const groupResult = await AddStockGroup(groupId, code)
+          if (groupResult === '添加成功' || groupResult === '已经关注了') {
+            successCount++
+          } else {
+            failCount++
+            failMessages.push(`${stock.SECURITY_SHORT_NAME || code}: ${groupResult}`)
+          }
+        } else {
+          successCount++
+        }
+      } else {
+        failCount++
+        failMessages.push(`${stock.SECURITY_SHORT_NAME || code}: ${followResult}`)
+      }
+    } catch (error) {
+      failCount++
+      failMessages.push(`${stock.SECURITY_SHORT_NAME || stock.SECURITY_CODE}: ${error.message}`)
+      console.error('添加股票异常:', stock, error)
+    }
+  }
+  
+  message.destroyAll()
+  
+  // 刷新分组列表和自选列表
+  await GetGroupList().then(result => {
+    groupList.value = result
+  })
+  
+  if (groupId !== 0) {
+    await GetFollowList(groupId).then(result => {
+      followList.value = result
+      stocks.value = []
+      for (const followedStock of result) {
+        let code = followedStock.StockCode
+        if (code.startsWith("us")) {
+          code = "gb_" + code.replace("us", "").toLowerCase()
+        }
+        stocks.value.push(code)
+        Greet(code).then(result => {
+          updateData(result)
+        })
+      }
+    })
+  } else {
+    // 刷新全部列表
+    GetFollowList(0).then(result => {
+      followList.value = result
+      stocks.value = []
+      for (const followedStock of result) {
+        let code = followedStock.StockCode
+        if (code.startsWith("us")) {
+          code = "gb_" + code.replace("us", "").toLowerCase()
+        }
+        stocks.value.push(code)
+        Greet(code).then(result => {
+          updateData(result)
+        })
+      }
+    })
+  }
+  
+  // 显示结果
+  if (successCount > 0) {
+    message.success(`成功添加 ${successCount} 只股票到分组"${groupName}"${failCount > 0 ? `，失败 ${failCount} 只` : ''}`)
+    if (failCount > 0 && failMessages.length > 0) {
+      console.warn('添加失败的股票:', failMessages)
+    }
+  } else {
+    message.warning(`添加失败，共 ${failCount} 只股票`)
+    if (failMessages.length > 0) {
+      message.error(failMessages.slice(0, 5).join('; ') + (failMessages.length > 5 ? '...' : ''))
+    }
+  }
+}
+
 // 保存prompt到历史记录
 function savePromptToHistory(promptContent, promptType) {
   if (!promptContent || !promptContent.trim()) {
@@ -3323,6 +3682,15 @@ function handleMoreAction(key, result) {
     </n-input-group>
   </div>
 
+  <!-- 指标选股按钮 -->
+  <div style="position: fixed;bottom: 174px;right:5px;z-index: 10;">
+    <n-input-group>
+      <n-button type="info" @click="openIndicatorStockSelect">
+        <n-icon :component="PulseOutline"/> &nbsp;指标选股
+      </n-button>
+    </n-input-group>
+  </div>
+
   <!-- AI选股对话框 -->
   <n-modal transform-origin="center" v-model:show="aiStockSelectModal" preset="card" style="width: 800px;"
            :title="'AI智能选股'"
@@ -3378,6 +3746,89 @@ function handleMoreAction(key, result) {
         />
         <n-button size="tiny" type="warning" @click="executeAiStockSelect" :loading="aiStockSelectLoading" :disabled="!aiStockSelectCondition.trim() || !aiStockSelectConfigId">开始选股</n-button>
       </n-flex>
+    </template>
+  </n-modal>
+
+  <!-- 指标选股对话框 -->
+  <n-modal transform-origin="center" v-model:show="indicatorStockSelectModal" preset="card" style="width: 90%; max-width: 1400px;"
+           :title="'指标选股'">
+    <n-spin size="small" :show="indicatorStockSelectLoading">
+      <n-flex vertical style="height: 600px;">
+        <n-input-group style="margin-bottom: 10px; --wails-draggable:no-drag">
+          <n-input 
+            v-model:value="indicatorStockSelectCondition" 
+            placeholder="请输入选股指标或者要求，例如：换手率大于3%，量比大于2，涨幅大于2%小于7%"
+            clearable
+            @keyup.enter="executeIndicatorStockSelect"
+          />
+          <n-button type="primary" @click="executeIndicatorStockSelect" :loading="indicatorStockSelectLoading">搜索A股</n-button>
+        </n-input-group>
+        
+        <n-flex justify="start" v-if="indicatorStockSelectTraceInfo" style="margin-bottom: 10px; --wails-draggable:no-drag">
+          <n-ellipsis line-clamp="1" :tooltip="true">
+            <n-text type="info" :bordered="false">选股条件：</n-text>
+            <n-text type="warning" :bordered="true">{{ indicatorStockSelectTraceInfo }}</n-text>
+            <template #tooltip>
+              <div style="text-align: center;max-width: 580px">
+                <n-text type="warning">{{ indicatorStockSelectTraceInfo }}</n-text>
+              </div>
+            </template>
+          </n-ellipsis>
+        </n-flex>
+        
+        <n-flex justify="space-between" style="margin-bottom: 10px; --wails-draggable:no-drag" v-if="indicatorStockSelectDataList.length > 0">
+          <n-text type="info">
+            共找到 <n-tag type="info" :bordered="false">{{ indicatorStockSelectDataList.length }}</n-tag> 只股票
+          </n-text>
+          <n-button type="success" @click="followAllIndicatorStocks" :disabled="indicatorStockSelectDataList.length === 0">
+            一键关注全部
+          </n-button>
+        </n-flex>
+        
+        <n-data-table
+          v-if="indicatorStockSelectDataList.length > 0"
+          :striped="true"
+          :max-height="'500px'"
+          size="medium"
+          :columns="indicatorStockSelectColumns"
+          :data="indicatorStockSelectDataList"
+          :pagination="{pageSize: 20}"
+          :scroll-x="indicatorStockSelectTableScrollX"
+          :render-cell="(value, rowData, column) => {
+            if(column.key=='SECURITY_CODE'||column.key=='SERIAL'){
+              return h(NText, { type: 'info',border: false }, { default: () => `${value}` })
+            }
+            if (isNumeric(value)) {
+              let type='info';
+              if (Number(value)<0){
+                type='success';
+              }
+              if(Number(value)>=0&&Number(value)<=5){
+                type='warning';
+              }
+              if (Number(value)>5){
+                type='error';
+              }
+              return h(NText, { type: type }, { default: () => `${value}` })
+            }else{
+              if(column.key=='SECURITY_SHORT_NAME'){
+                return h(NButton, { type: 'info',bordered: false ,size:'small',onClick:()=>{
+                  OpenURL(`https://quote.eastmoney.com/${rowData.MARKET_SHORT_NAME}${rowData.SECURITY_CODE}.html#fullScreenChart`)
+                }}, { default: () => `${value}` })
+              }else{
+                return h(NText, { type: 'info' }, { default: () => `${value}` })
+              }
+            }
+          }"
+        />
+        
+        <div v-else-if="!indicatorStockSelectLoading" style="text-align: center; padding: 50px;">
+          <n-text type="info">请输入选股条件并点击"搜索A股"按钮开始选股</n-text>
+        </div>
+      </n-flex>
+    </n-spin>
+    <template #footer>
+      <n-text type="error">*选股结果仅供参考，请以实际行情为准。投资需谨慎，风险自担。</n-text>
     </template>
   </n-modal>
 </template>
