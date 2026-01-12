@@ -1,5 +1,5 @@
 <script setup>
-import {computed, h, onBeforeMount, onMounted, reactive, ref} from "vue";
+import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref} from "vue";
 import {
   CreateTradingRecord,
   DeleteTradingRecord,
@@ -7,8 +7,16 @@ import {
   GetTradingRecord,
   GetTradingRecordByDate,
   GetTradingRecordList,
-  UpdateTradingRecord
+  UpdateTradingRecord,
+  SummaryStockNews,
+  GetAIResponseResult,
+  SaveAIResponseResult,
+  SaveAsMarkdown,
+  ShareAnalysis,
+  GetAiConfigs,
+  GetPromptTemplates
 } from "../../wailsjs/go/main/App";
+import {EventsOn, EventsOff} from "../../wailsjs/runtime";
 import {
   NButton,
   NCard,
@@ -23,11 +31,15 @@ import {
   NModal,
   NScrollbar,
   NSelect,
+  NSwitch,
   NTag,
   NText,
+  NFlex,
+  NSpin,
   useMessage
 } from "naive-ui";
-import {CalendarOutline, DocumentTextOutline, TrashOutline} from "@vicons/ionicons5";
+import {CalendarOutline, DocumentTextOutline, TrashOutline, PulseOutline} from "@vicons/ionicons5";
+import {MdPreview} from "md-editor-v3";
 
 const message = useMessage();
 const loading = ref(false);
@@ -40,6 +52,24 @@ const records = ref([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(10);
+
+// AI总结相关状态
+const aiSummaryModal = ref(false);
+const aiSummary = ref("");
+const aiSummaryTime = ref("");
+const aiSummaryModelName = ref("");
+const aiSummaryChatId = ref("");
+const aiSummaryQuestion = ref("总结和分析今日股票市场的表现，包括涨停跌停板块情况、市场热点、资金流向等，并给出投资建议");
+const aiSummaryLoading = ref(false);
+const aiConfigId = ref(null);
+const sysPromptId = ref(null);
+const enableTools = ref(true);
+const thinkingMode = ref(true);
+const aiConfigs = ref([]);
+const sysPromptOptions = ref([]);
+const userPromptOptions = ref([]);
+const promptTemplates = ref([]);
+const theme = ref("light");
 
 // 计算属性：只显示涨停数大于3的板块，并按涨停数降序排序
 const filteredLimitUpSectors = computed(() => {
@@ -99,7 +129,126 @@ const columns = [
 onBeforeMount(() => {
   loadRecords();
   loadLimitUpDownSectors();
+  initAIConfig();
+  // 监听AI总结事件
+  EventsOn("summaryStockNews", handleAISummaryEvent);
 });
+
+onBeforeUnmount(() => {
+  EventsOff("summaryStockNews");
+});
+
+function initAIConfig() {
+  GetAiConfigs().then(result => {
+    if (result && result.length > 0) {
+      aiConfigs.value = result;
+      aiConfigId.value = result[0].ID;
+    }
+  });
+  
+  GetPromptTemplates().then(result => {
+    if (result) {
+      promptTemplates.value = result;
+      sysPromptOptions.value = result.filter(t => t.type === "system");
+      userPromptOptions.value = result.filter(t => t.type === "user");
+      if (sysPromptOptions.value.length > 0) {
+        sysPromptId.value = sysPromptOptions.value[0].ID;
+      }
+    }
+  });
+}
+
+function handleAISummaryEvent(msg) {
+  aiSummaryLoading.value = false;
+  if (msg === "DONE") {
+    SaveAIResponseResult("炒股复盘", "炒股复盘", aiSummary.value, aiSummaryChatId.value, aiSummaryQuestion.value, aiConfigId.value).then(() => {
+      message.info("AI分析完成！");
+      message.destroyAll();
+    });
+  } else {
+    if (msg.code === 0 && msg.content) {
+      message.error("AI分析出错，请查看下方错误信息");
+      aiSummary.value = aiSummary.value + "\n\n" + msg.content;
+      return;
+    }
+    if (msg.chatId) {
+      aiSummaryChatId.value = msg.chatId;
+    }
+    if (msg.question) {
+      aiSummaryQuestion.value = msg.question;
+    }
+    if (msg.content) {
+      aiSummary.value = aiSummary.value + msg.content;
+    }
+    if (msg.extraContent) {
+      aiSummary.value = aiSummary.value + msg.extraContent;
+    }
+    if (msg.model) {
+      aiSummaryModelName.value = msg.model;
+    }
+    if (msg.time) {
+      aiSummaryTime.value = msg.time;
+    }
+  }
+}
+
+function getAISummary() {
+  aiSummaryModal.value = true;
+  aiSummaryLoading.value = true;
+  const dateStr = tradeDate.value instanceof Date ? tradeDate.value.toISOString().split('T')[0] : tradeDate.value;
+  GetAIResponseResult("炒股复盘-" + dateStr).then(result => {
+    aiSummaryLoading.value = false;
+    if (result.content) {
+      aiSummary.value = result.content;
+      aiSummaryQuestion.value = result.question;
+      const date = new Date(result.CreatedAt);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      aiSummaryTime.value = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      aiSummaryModelName.value = result.modelName;
+    } else {
+      aiSummaryTime.value = "";
+      aiSummary.value = "";
+      aiSummaryModelName.value = "";
+    }
+  });
+}
+
+function reAISummary() {
+  aiSummary.value = "";
+  aiSummaryModal.value = true;
+  aiSummaryLoading.value = true;
+  const dateStr = tradeDate.value instanceof Date ? tradeDate.value.toISOString().split('T')[0] : tradeDate.value;
+  const prompt = `日期：${dateStr}\n${aiSummaryQuestion.value}\n\n请结合当日的涨停跌停板块情况进行分析。`;
+  SummaryStockNews(prompt, aiConfigId.value, sysPromptId.value, enableTools.value, thinkingMode.value);
+}
+
+async function copyAISummaryToClipboard() {
+  try {
+    await navigator.clipboard.writeText(aiSummary.value);
+    message.success('分析结果已复制到剪切板');
+  } catch (err) {
+    message.error('复制失败: ' + err);
+  }
+}
+
+function saveAISummaryAsMarkdown() {
+  const dateStr = tradeDate.value instanceof Date ? tradeDate.value.toISOString().split('T')[0] : tradeDate.value;
+  SaveAsMarkdown('炒股复盘-' + dateStr, '炒股复盘').then(result => {
+    message.success(result);
+  });
+}
+
+function shareAISummary() {
+  const dateStr = tradeDate.value instanceof Date ? tradeDate.value.toISOString().split('T')[0] : tradeDate.value;
+  ShareAnalysis('炒股复盘-' + dateStr, '炒股复盘', aiSummary.value).then(result => {
+    message.success(result);
+  });
+}
 
 function loadRecords() {
   loading.value = true;
@@ -262,12 +411,20 @@ function handleDateChange(value) {
   <n-scrollbar style="height: calc(100vh - 120px);">
     <n-card title="炒股复盘记录" style="margin: 16px;">
       <template #header-extra>
-        <n-button type="primary" @click="newRecord">
-          <template #icon>
-            <n-icon><DocumentTextOutline /></n-icon>
-          </template>
-          新建复盘
-        </n-button>
+        <n-flex gap="8">
+          <n-button type="primary" @click="newRecord">
+            <template #icon>
+              <n-icon><DocumentTextOutline /></n-icon>
+            </template>
+            新建复盘
+          </n-button>
+          <n-button type="info" @click="getAISummary">
+            <template #icon>
+              <n-icon><PulseOutline /></n-icon>
+            </template>
+            AI复盘
+          </n-button>
+        </n-flex>
       </template>
 
       <n-form :model="formData" label-placement="left" label-width="80px" style="margin-bottom: 16px;">
@@ -435,6 +592,68 @@ function handleDateChange(value) {
         </n-form-item>
       </n-form>
     </n-modal>
+
+    <!-- AI复盘模态框 -->
+    <n-modal transform-origin="center" v-model:show="aiSummaryModal" preset="card" style="width: 800px;"
+             :title="'AI复盘'">
+      <n-spin size="small" :show="aiSummaryLoading">
+        <MdPreview style="height: 440px;text-align: left" :modelValue="aiSummary" :theme="theme"/>
+      </n-spin>
+      <template #footer>
+        <n-flex justify="space-between" ref="tipsRef">
+          <n-text type="info" v-if="aiSummaryTime">
+            <n-tag v-if="aiSummaryModelName" type="warning" round :title="aiSummaryChatId" :bordered="false">{{ aiSummaryModelName }}</n-tag>
+            {{ aiSummaryTime }}
+          </n-text>
+          <n-text type="error">*AI分析结果仅供参考，请以实际行情为准。投资需谨慎，风险自担。</n-text>
+        </n-flex>
+      </template>
+      <template #action>
+        <n-flex justify="left" style="margin-bottom: 10px">
+          <n-switch v-model:value="enableTools" :round="false">
+            <template #checked>
+              启用AI函数工具调用
+            </template>
+            <template #unchecked>
+              不启用AI函数工具调用
+            </template>
+          </n-switch>
+          <n-switch v-model:value="thinkingMode" :round="false">
+            <template #checked>
+              启用思考模式
+            </template>
+            <template #unchecked>
+              不启用思考模式
+            </template>
+          </n-switch>
+          <n-text type="error" style="margin-left: 10px">*AI函数工具调用可以增强AI获取数据的能力,但会消耗更多tokens。</n-text>
+        </n-flex>
+        <n-flex justify="space-between" style="margin-bottom: 10px">
+          <n-select style="width: 32%" v-model:value="aiConfigId" label-field="name" value-field="ID"
+                    :options="aiConfigs" placeholder="请选择AI模型服务配置"/>
+          <n-select style="width: 32%" v-model:value="sysPromptId" label-field="name" value-field="ID"
+                    :options="sysPromptOptions" placeholder="请选择系统提示词"/>
+          <n-select style="width: 32%" v-model:value="aiSummaryQuestion" label-field="name" value-field="content"
+                    :options="userPromptOptions" placeholder="请选择用户提示词"/>
+        </n-flex>
+        <n-flex justify="right">
+          <n-input v-model:value="aiSummaryQuestion" style="text-align: left" clearable
+                   type="textarea"
+                   :show-count="true"
+                   placeholder="请输入您的问题:例如 总结和分析今日股票市场的表现，包括涨停跌停板块情况、市场热点、资金流向等，并给出投资建议"
+                   :autosize="{
+              minRows: 2,
+              maxRows: 5
+            }"
+          />
+          <n-button size="tiny" type="warning" @click="reAISummary">再次总结</n-button>
+          <n-button size="tiny" type="success" @click="copyAISummaryToClipboard">复制到剪切板</n-button>
+          <n-button size="tiny" type="primary" @click="saveAISummaryAsMarkdown">保存为Markdown文件</n-button>
+          <n-button size="tiny" type="error" @click="shareAISummary">分享到项目社区</n-button>
+        </n-flex>
+      </template>
+    </n-modal>
+
   </n-scrollbar>
 </template>
 

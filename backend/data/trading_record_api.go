@@ -36,7 +36,142 @@ func (t *TradingRecordApi) GetLimitUpDownSectors(tradeDate string) (limitUpSecto
 		tradeDate = time.Now().Format("2006-01-02")
 	}
 
-	// 从东方财富获取涨停跌停数据
+	// 将日期格式转换为东方财富API需要的格式 (YYYYMMDD)
+	dateTime, err := time.Parse("2006-01-02", tradeDate)
+	if err != nil {
+		logger.SugaredLogger.Errorf("日期格式错误: %s", err.Error())
+		return nil, nil, fmt.Errorf("日期格式错误: %s", err.Error())
+	}
+	dateStr := dateTime.Format("20060102")
+
+	// 从东方财富数据中心API获取指定日期的涨停跌停数据
+	// 使用datacenter API获取历史数据
+	url := fmt.Sprintf("https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=CHANGE_RATE&sortTypes=-1&pageSize=5000&pageNumber=1&reportName=RPT_DAILYBILLBOARD_DETAILSNEW&columns=SECURITY_CODE,SECUCODE,SECURITY_NAME_ABBR,TRADE_DATE,CLOSE_PRICE,CHANGE_RATE,BILLBOARD_NET_AMT,BILLBOARD_BUY_AMT,BILLBOARD_SELL_AMT&filter=(TRADE_DATE='%s')", dateStr)
+	
+	logger.SugaredLogger.Infof("获取涨停跌停数据，日期: %s, URL: %s", tradeDate, url)
+	
+	resp, err := t.client.SetTimeout(time.Duration(t.config.CrawlTimeOut)*time.Second).R().
+		SetHeader("Host", "datacenter-web.eastmoney.com").
+		SetHeader("Referer", "https://data.eastmoney.com/stock/tradedetail.html").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0").
+		Get(url)
+	
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取涨停跌停数据失败: %s", err.Error())
+		// 如果历史数据API失败，且是当天数据，尝试使用实时API
+		if dateStr == time.Now().Format("20060102") {
+			return t.getCurrentDayLimitUpDownSectors()
+		}
+		return nil, nil, fmt.Errorf("获取历史数据失败: %s", err.Error())
+	}
+
+	// 解析JSON响应
+	var result map[string]interface{}
+	if err := json.Unmarshal(resp.Body(), &result); err != nil {
+		logger.SugaredLogger.Errorf("解析涨停跌停数据失败: %s", err.Error())
+		// 如果解析失败，且是当天数据，尝试使用实时API
+		if dateStr == time.Now().Format("20060102") {
+			return t.getCurrentDayLimitUpDownSectors()
+		}
+		return nil, nil, fmt.Errorf("解析历史数据失败: %s", err.Error())
+	}
+
+	// 检查是否有数据
+	successVal, ok := result["success"]
+	if !ok {
+		logger.SugaredLogger.Warnf("API返回数据缺少success字段，日期: %s", tradeDate)
+		if dateStr == time.Now().Format("20060102") {
+			return t.getCurrentDayLimitUpDownSectors()
+		}
+		return nil, nil, fmt.Errorf("该日期(%s)暂无数据", tradeDate)
+	}
+	// 将interface{}转换为字符串再转换为bool
+	successStr := convertor.ToString(successVal)
+	success, _ := convertor.ToBool(successStr)
+	if !success {
+		logger.SugaredLogger.Warnf("API返回失败，日期: %s", tradeDate)
+		// 如果历史数据API没有数据，且是当天数据，尝试使用实时API
+		if dateStr == time.Now().Format("20060102") {
+			return t.getCurrentDayLimitUpDownSectors()
+		}
+		return nil, nil, fmt.Errorf("该日期(%s)暂无数据", tradeDate)
+	}
+
+	data, ok := result["result"].(map[string]interface{})
+	if !ok {
+		logger.SugaredLogger.Warnf("数据格式错误，尝试使用实时API")
+		if dateStr == time.Now().Format("20060102") {
+			return t.getCurrentDayLimitUpDownSectors()
+		}
+		return nil, nil, fmt.Errorf("数据格式错误")
+	}
+
+	stocks, ok := data["data"].([]interface{})
+	if !ok {
+		logger.SugaredLogger.Warnf("股票数据格式错误，尝试使用实时API")
+		if dateStr == time.Now().Format("20060102") {
+			return t.getCurrentDayLimitUpDownSectors()
+		}
+		return nil, nil, fmt.Errorf("股票数据格式错误")
+	}
+
+	// 获取所有股票的板块信息（需要单独查询）
+	// 先获取涨停跌停股票列表
+	sectorLimitUpMap := make(map[string][]string)
+	sectorLimitDownMap := make(map[string][]string)
+
+	for _, item := range stocks {
+		stock := item.(map[string]interface{})
+		code := convertor.ToString(stock["SECURITY_CODE"])
+		name := convertor.ToString(stock["SECURITY_NAME_ABBR"])
+		pctChg, _ := convertor.ToFloat(stock["CHANGE_RATE"])
+
+		// 获取股票板块信息
+		bkName := t.getStockSector(code)
+		if bkName == "" {
+			continue
+		}
+
+		// 涨停（涨幅>=9.5%）
+		if pctChg >= 9.5 {
+			if _, ok := sectorLimitUpMap[bkName]; !ok {
+				sectorLimitUpMap[bkName] = make([]string, 0)
+			}
+			sectorLimitUpMap[bkName] = append(sectorLimitUpMap[bkName], fmt.Sprintf("%s(%s)", name, code))
+		}
+
+		// 跌停（跌幅<=-9.5%）
+		if pctChg <= -9.5 {
+			if _, ok := sectorLimitDownMap[bkName]; !ok {
+				sectorLimitDownMap[bkName] = make([]string, 0)
+			}
+			sectorLimitDownMap[bkName] = append(sectorLimitDownMap[bkName], fmt.Sprintf("%s(%s)", name, code))
+		}
+	}
+
+	// 转换为结构体
+	for sectorName, stocks := range sectorLimitUpMap {
+		limitUpSectors = append(limitUpSectors, models.LimitUpDownSector{
+			SectorName: sectorName,
+			StockCount: len(stocks),
+			Stocks:     stocks,
+		})
+	}
+
+	for sectorName, stocks := range sectorLimitDownMap {
+		limitDownSectors = append(limitDownSectors, models.LimitUpDownSector{
+			SectorName: sectorName,
+			StockCount: len(stocks),
+			Stocks:     stocks,
+		})
+	}
+
+	return limitUpSectors, limitDownSectors, nil
+}
+
+// getCurrentDayLimitUpDownSectors 获取当天的涨停跌停数据（使用实时API）
+func (t *TradingRecordApi) getCurrentDayLimitUpDownSectors() (limitUpSectors []models.LimitUpDownSector, limitDownSectors []models.LimitUpDownSector, err error) {
+	// 从东方财富获取实时涨停跌停数据
 	url := fmt.Sprintf("https://push2.eastmoney.com/api/qt/clist/get?np=1&fltt=2&invt=2&cb=data&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f100,f265&fid=f3&po=1&pz=5000&pn=1&_=%d", time.Now().UnixMilli())
 	
 	resp, err := t.client.SetTimeout(time.Duration(t.config.CrawlTimeOut)*time.Second).R().
@@ -46,7 +181,7 @@ func (t *TradingRecordApi) GetLimitUpDownSectors(tradeDate string) (limitUpSecto
 		Get(url)
 	
 	if err != nil {
-		logger.SugaredLogger.Errorf("获取涨停跌停数据失败: %s", err.Error())
+		logger.SugaredLogger.Errorf("获取实时涨停跌停数据失败: %s", err.Error())
 		return nil, nil, err
 	}
 
@@ -141,6 +276,20 @@ func (t *TradingRecordApi) GetLimitUpDownSectors(tradeDate string) (limitUpSecto
 	}
 
 	return limitUpSectors, limitDownSectors, nil
+}
+
+// getStockSector 获取股票所属板块
+func (t *TradingRecordApi) getStockSector(stockCode string) string {
+	// 从数据库查询股票板块信息
+	var stockBasic StockBasic
+	err := db.Dao.Model(&StockBasic{}).Where("symbol = ?", stockCode).First(&stockBasic).Error
+	if err == nil && stockBasic.BKName != "" {
+		return stockBasic.BKName
+	}
+	
+	// 如果数据库没有，尝试从API获取（这里可以调用现有的获取股票信息的方法）
+	// 暂时返回空，后续可以优化
+	return ""
 }
 
 // CreateTradingRecord 创建复盘记录
