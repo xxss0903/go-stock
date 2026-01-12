@@ -1481,6 +1481,15 @@ func (a *App) RemoveGroup(groupId int) string {
 	}
 }
 
+func (a *App) UpdateGroup(groupId int, name string) string {
+	ok := data.NewStockGroupApi(db.Dao).UpdateGroup(groupId, name)
+	if ok {
+		return "更新成功"
+	} else {
+		return "更新失败"
+	}
+}
+
 func (a *App) GetStockKLine(stockCode, stockName string, days int64) *[]data.KLineData {
 	return data.NewStockDataApi().GetHK_KLineData(stockCode, "day", days)
 }

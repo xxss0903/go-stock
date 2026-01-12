@@ -282,6 +282,10 @@ export function UpdateConfig(arg1) {
   return window['go']['main']['App']['UpdateConfig'](arg1);
 }
 
+export function UpdateGroup(arg1, arg2) {
+  return window['go']['main']['App']['UpdateGroup'](arg1, arg2);
+}
+
 export function UpdateGroupSort(arg1, arg2) {
   return window['go']['main']['App']['UpdateGroupSort'](arg1, arg2);
 }

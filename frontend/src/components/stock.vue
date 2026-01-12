@@ -33,7 +33,8 @@ import {
   ShareAnalysis,
   SummaryStockNews,
   UnFollow,
-  UpdateGroupSort
+  UpdateGroupSort,
+  UpdateGroup
 } from '../../wailsjs/go/main/App'
 import {
   NAvatar,
@@ -121,6 +122,9 @@ const modalShow5 = ref(false)
 const summaryModal = ref(false) // AI总结对话框
 const aiStockSelectModal = ref(false) // AI选股对话框
 const addBTN = ref(true)
+const editingGroupId = ref(null) // 正在编辑的分组ID
+const editingGroupName = ref('') // 正在编辑的分组名称
+const isSavingGroupName = ref(false) // 是否正在保存分组名称
 const enableTools = ref(false)
 const thinkingMode = ref(false)
 const formModel = ref({
@@ -2485,6 +2489,67 @@ function AddStockGroupInfo(groupId, code, name) {
 
 }
 
+// 开始编辑分组名称
+function startEditGroup(groupId, currentName) {
+  editingGroupId.value = groupId
+  editingGroupName.value = currentName
+}
+
+// 保存分组名称
+function saveGroupName(groupId) {
+  // 如果正在保存，直接返回，避免重复触发
+  if (isSavingGroupName.value) {
+    return
+  }
+  
+  // 如果已经不在编辑状态，直接返回
+  if (editingGroupId.value !== groupId) {
+    return
+  }
+  
+  // 先保存当前值到局部变量，避免后续被清空
+  const currentName = editingGroupName.value ? editingGroupName.value.trim() : ''
+  
+  if (!currentName) {
+    message.warning('分组名称不能为空')
+    cancelEditGroup()
+    return
+  }
+  
+  // 设置保存标志
+  isSavingGroupName.value = true
+  
+  // 先取消编辑状态，避免重复触发
+  cancelEditGroup()
+  
+  UpdateGroup(groupId, currentName).then(result => {
+    isSavingGroupName.value = false
+    if (result === '更新成功') {
+      message.success('分组名称已更新')
+      // 更新本地分组列表
+      const group = groupList.value.find(g => g.ID === groupId)
+      if (group) {
+        group.name = currentName
+      }
+      // 刷新分组列表
+      GetGroupList().then(result => {
+        groupList.value = result
+      })
+    } else {
+      message.error('更新失败：' + result)
+    }
+  }).catch(error => {
+    isSavingGroupName.value = false
+    message.error('更新失败：' + error.message)
+  })
+}
+
+// 取消编辑分组名称
+function cancelEditGroup() {
+  editingGroupId.value = null
+  editingGroupName.value = ''
+}
+
 function updateTab(name) {
   stocks.value = []
   const tabId= Number(name)
@@ -2771,7 +2836,22 @@ function handleMoreAction(key, result) {
         </n-gi>
       </n-grid>
     </n-tab-pane>
-    <n-tab-pane closable v-for="group in groupList" :group-id="group.ID" :name="String(group.ID)" :tab="group.name">
+    <n-tab-pane closable v-for="group in groupList" :group-id="group.ID" :name="String(group.ID)">
+      <template #tab>
+        <span v-if="editingGroupId !== group.ID" @dblclick.stop="startEditGroup(group.ID, group.name)" style="cursor: pointer; user-select: none;">
+          {{ group.name }}
+        </span>
+        <n-input
+          v-else
+          v-model:value="editingGroupName"
+          size="small"
+          style="width: 120px;"
+          @blur="saveGroupName(group.ID)"
+          @keyup.enter="saveGroupName(group.ID)"
+          @keyup.esc="cancelEditGroup"
+          autofocus
+        />
+      </template>
       <n-grid :x-gap="8" :cols="3" :y-gap="8">
         <n-gi :id="result['股票代码']+'_gi'" v-for="result in groupResults" style="margin-left: 2px;">
           <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"

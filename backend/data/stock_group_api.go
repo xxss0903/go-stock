@@ -135,3 +135,8 @@ func (receiver StockGroupApi) RemoveGroup(id int) bool {
 	return err == nil
 
 }
+
+func (receiver StockGroupApi) UpdateGroup(id int, name string) bool {
+	err := receiver.dao.Model(&Group{}).Where("id = ?", id).Update("name", name).Error
+	return err == nil
+}
