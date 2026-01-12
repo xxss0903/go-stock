@@ -13,6 +13,39 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
+// TushareLimitListResponse Tushare涨跌停列表响应
+type TushareLimitListResponse struct {
+	RequestId string `json:"request_id"`
+	Code      int    `json:"code"`
+	Msg       string `json:"msg"`
+	Data      struct {
+		Fields []string   `json:"fields"`
+		Items  [][]any    `json:"items"`
+	} `json:"data"`
+}
+
+// LimitStockInfo 涨跌停股票信息
+type LimitStockInfo struct {
+	TradeDate     string  `json:"tradeDate"`     // 交易日期
+	TsCode        string  `json:"tsCode"`        // 股票代码
+	Industry      string  `json:"industry"`      // 所属行业
+	Name          string  `json:"name"`          // 股票名称
+	Close         float64 `json:"close"`         // 收盘价
+	PctChg        float64 `json:"pctChg"`        // 涨跌幅
+	Amount        float64 `json:"amount"`        // 成交额
+	LimitAmount   float64 `json:"limitAmount"`  // 板上成交金额
+	FloatMv       float64 `json:"floatMv"`       // 流通市值
+	TotalMv       float64 `json:"totalMv"`       // 总市值
+	TurnoverRatio float64 `json:"turnoverRatio"` // 换手率
+	FdAmount      float64 `json:"fdAmount"`      // 封单金额
+	FirstTime     string  `json:"firstTime"`     // 首次封板时间
+	LastTime      string  `json:"lastTime"`      // 最后封板时间
+	OpenTimes     int     `json:"openTimes"`     // 炸板次数
+	UpStat        string  `json:"upStat"`        // 涨停统计
+	LimitTimes    int     `json:"limitTimes"`    // 连板数
+	LimitType     string  `json:"limitType"`     // D跌停U涨停Z炸板
+}
+
 // @Author spark
 // @Date 2025/1/8
 // @Desc 炒股复盘记录API
@@ -337,6 +370,7 @@ func (t *TradingRecordApi) GetTradingRecordList(page, pageSize int) ([]models.Tr
 
 	offset := (page - 1) * pageSize
 	err := db.Dao.Model(&models.TradingRecord{}).
+		Where("is_del = ?", 0).
 		Order("trade_date desc").
 		Limit(pageSize).
 		Offset(offset).
@@ -346,7 +380,105 @@ func (t *TradingRecordApi) GetTradingRecordList(page, pageSize int) ([]models.Tr
 		return nil, 0, err
 	}
 
-	db.Dao.Model(&models.TradingRecord{}).Count(&total)
+	db.Dao.Model(&models.TradingRecord{}).Where("is_del = ?", 0).Count(&total)
 	return records, total, nil
+}
+
+// GetLimitListFromTushare 从Tushare获取涨跌停股票列表
+func (t *TradingRecordApi) GetLimitListFromTushare(tradeDate string, limitType string) ([]LimitStockInfo, error) {
+	if tradeDate == "" {
+		tradeDate = time.Now().Format("20060102")
+	} else {
+		// 将日期格式从 2006-01-02 转换为 20060102
+		dateTime, err := time.Parse("2006-01-02", tradeDate)
+		if err != nil {
+			logger.SugaredLogger.Errorf("日期格式错误: %s", err.Error())
+			return nil, fmt.Errorf("日期格式错误: %s", err.Error())
+		}
+		tradeDate = dateTime.Format("20060102")
+	}
+
+	if limitType == "" {
+		limitType = "U" // 默认获取涨停
+	}
+
+	// 添加延迟，避免API限流（Tushare限制每秒最多1次请求）
+	time.Sleep(1100 * time.Millisecond)
+
+	// 构建请求参数
+	params := map[string]any{
+		"trade_date": tradeDate,
+		"limit_type": limitType,
+	}
+
+	fields := "ts_code,trade_date,industry,name,close,pct_chg,amount,limit_amount,float_mv,total_mv,turnover_ratio,fd_amount,first_time,last_time,open_times,up_stat,limit_times,limit"
+
+	resp := &TushareLimitListResponse{}
+	_, err := t.client.SetTimeout(time.Duration(t.config.CrawlTimeOut)*time.Second).R().
+		SetHeader("content-type", "application/json").
+		SetBody(map[string]any{
+			"api_name": "limit_list_d",
+			"token":    t.config.TushareToken,
+			"params":   params,
+			"fields":   fields,
+		}).
+		SetResult(resp).
+		Post("http://api.tushare.pro")
+
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取Tushare涨跌停数据失败: %s", err.Error())
+		return nil, err
+	}
+
+	if resp.Code != 0 {
+		logger.SugaredLogger.Errorf("Tushare API返回错误: %s", resp.Msg)
+		return nil, fmt.Errorf("Tushare API错误: %s", resp.Msg)
+	}
+
+	// 解析数据
+	var limitStocks []LimitStockInfo
+	if resp.Data.Items != nil && len(resp.Data.Items) > 0 {
+		for _, item := range resp.Data.Items {
+			if len(item) < 18 {
+				continue
+			}
+
+			close, _ := convertor.ToFloat(item[4])
+			pctChg, _ := convertor.ToFloat(item[5])
+			amount, _ := convertor.ToFloat(item[6])
+			limitAmount, _ := convertor.ToFloat(item[7])
+			floatMv, _ := convertor.ToFloat(item[8])
+			totalMv, _ := convertor.ToFloat(item[9])
+			turnoverRatio, _ := convertor.ToFloat(item[10])
+			fdAmount, _ := convertor.ToFloat(item[11])
+			openTimes, _ := convertor.ToInt(item[14])
+			limitTimes, _ := convertor.ToInt(item[16])
+
+			stock := LimitStockInfo{
+				TsCode:        convertor.ToString(item[0]),
+				TradeDate:     convertor.ToString(item[1]),
+				Industry:      convertor.ToString(item[2]),
+				Name:          convertor.ToString(item[3]),
+				Close:         close,
+				PctChg:        pctChg,
+				Amount:        amount,
+				LimitAmount:   limitAmount,
+				FloatMv:       floatMv,
+				TotalMv:       totalMv,
+				TurnoverRatio: turnoverRatio,
+				FdAmount:      fdAmount,
+				FirstTime:     convertor.ToString(item[12]),
+				LastTime:      convertor.ToString(item[13]),
+				OpenTimes:     int(openTimes),
+				UpStat:        convertor.ToString(item[15]),
+				LimitTimes:    int(limitTimes),
+				LimitType:     convertor.ToString(item[17]),
+			}
+			limitStocks = append(limitStocks, stock)
+		}
+	}
+
+	logger.SugaredLogger.Infof("获取到 %d 条涨跌停数据", len(limitStocks))
+	return limitStocks, nil
 }
 

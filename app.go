@@ -1468,6 +1468,22 @@ func (a *App) GetTradingRecordList(page, pageSize int) map[string]any {
 	}
 }
 
+// GetLimitListFromTushare 从Tushare获取涨跌停股票列表
+func (a *App) GetLimitListFromTushare(tradeDate string, limitType string) map[string]any {
+	stocks, err := data.NewTradingRecordApi().GetLimitListFromTushare(tradeDate, limitType)
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取涨跌停股票列表失败: %s", err.Error())
+		return map[string]any{
+			"stocks": []data.LimitStockInfo{},
+			"error":  err.Error(),
+		}
+	}
+	return map[string]any{
+		"stocks": stocks,
+		"error":  "",
+	}
+}
+
 // SaveImage
 //
 //	@Description: 跨平台保存图片

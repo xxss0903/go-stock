@@ -56,6 +56,8 @@ export function GetIndustryMoneyRankSina(arg1:string,arg2:string):Promise<Array<
 
 export function GetIndustryRank(arg1:string,arg2:number):Promise<Array<any>>;
 
+export function GetLimitListFromTushare(arg1:string,arg2:string):Promise<Record<string, any>>;
+
 export function GetLimitUpDownSectors(arg1:string):Promise<Record<string, any>>;
 
 export function GetMoneyRankSina(arg1:string):Promise<Array<Record<string, any>>>;

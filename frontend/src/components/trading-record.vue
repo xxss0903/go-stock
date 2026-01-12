@@ -14,7 +14,8 @@ import {
   SaveAsMarkdown,
   ShareAnalysis,
   GetAiConfigs,
-  GetPromptTemplates
+  GetPromptTemplates,
+  GetLimitListFromTushare
 } from "../../wailsjs/go/main/App";
 import {EventsOn, EventsOff} from "../../wailsjs/runtime";
 import {
@@ -52,6 +53,14 @@ const records = ref([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(10);
+
+// 涨跌停股票列表
+const limitUpStocks = ref([]);
+const limitDownStocks = ref([]);
+const limitUpStocksLoading = ref(false);
+const limitDownStocksLoading = ref(false);
+const showLimitStocksModal = ref(false);
+const limitStocksType = ref("U"); // U涨停 D跌停 Z炸板
 
 // AI总结相关状态
 const aiSummaryModal = ref(false);
@@ -123,6 +132,75 @@ const columns = [
         }, {default: () => "删除"})
       ]);
     }
+  }
+];
+
+const limitStocksColumns = [
+  {
+    title: "股票代码",
+    key: "tsCode",
+    width: 120
+  },
+  {
+    title: "股票名称",
+    key: "name",
+    width: 100
+  },
+  {
+    title: "所属行业",
+    key: "industry",
+    width: 120
+  },
+  {
+    title: "收盘价",
+    key: "close",
+    width: 100,
+    render(row) {
+      return h("span", row.close.toFixed(2));
+    }
+  },
+  {
+    title: "涨跌幅",
+    key: "pctChg",
+    width: 100,
+    render(row) {
+      const color = row.pctChg >= 0 ? "error" : "info";
+      return h(NTag, {type: color, size: "small"}, {default: () => `${row.pctChg.toFixed(2)}%`});
+    }
+  },
+  {
+    title: "成交额(万)",
+    key: "amount",
+    width: 120,
+    render(row) {
+      return h("span", (row.amount / 10000).toFixed(2));
+    }
+  },
+  {
+    title: "换手率",
+    key: "turnoverRatio",
+    width: 100,
+    render(row) {
+      return h("span", `${row.turnoverRatio.toFixed(2)}%`);
+    }
+  },
+  {
+    title: "封单金额(万)",
+    key: "fdAmount",
+    width: 120,
+    render(row) {
+      return h("span", (row.fdAmount / 10000).toFixed(2));
+    }
+  },
+  {
+    title: "连板数",
+    key: "limitTimes",
+    width: 80
+  },
+  {
+    title: "涨停统计",
+    key: "upStat",
+    width: 100
   }
 ];
 
@@ -275,6 +353,49 @@ function loadLimitUpDownSectors() {
       limitDownSectors.value = result.limitDownSectors || [];
     }
   });
+  
+  // 同时加载Tushare的涨跌停股票列表
+  loadLimitStocksFromTushare(dateStr);
+}
+
+function loadLimitStocksFromTushare(dateStr) {
+  if (!dateStr) {
+    if (!tradeDate.value) return;
+    const date = tradeDate.value instanceof Date ? tradeDate.value : new Date(tradeDate.value);
+    dateStr = date.toISOString().split('T')[0];
+  }
+  
+  // 加载涨停股票
+  limitUpStocksLoading.value = true;
+  GetLimitListFromTushare(dateStr, "U").then(result => {
+    limitUpStocksLoading.value = false;
+    if (result.error) {
+      message.warning("获取涨停股票列表失败: " + result.error);
+    } else {
+      limitUpStocks.value = result.stocks || [];
+    }
+    
+    // 延迟1.5秒后加载跌停股票，避免API限流
+    setTimeout(() => {
+      limitDownStocksLoading.value = true;
+      GetLimitListFromTushare(dateStr, "D").then(result => {
+        limitDownStocksLoading.value = false;
+        if (result.error) {
+          message.warning("获取跌停股票列表失败: " + result.error);
+        } else {
+          limitDownStocks.value = result.stocks || [];
+        }
+      });
+    }, 1500);
+  });
+}
+
+function showLimitStocks(type) {
+  limitStocksType.value = type;
+  showLimitStocksModal.value = true;
+  const date = tradeDate.value instanceof Date ? tradeDate.value : new Date(tradeDate.value);
+  const dateStr = date.toISOString().split('T')[0];
+  loadLimitStocksFromTushare(dateStr);
 }
 
 function editRecord(record) {
@@ -444,6 +565,9 @@ function handleDateChange(value) {
         <!-- 左侧：涨停板块 -->
         <n-grid-item>
           <n-card v-if="filteredLimitUpSectors.length > 0" title="涨停板块（涨停数>3）" size="small">
+            <template #header-extra>
+              <n-button size="small" type="error" @click="showLimitStocks('U')">查看涨停股票</n-button>
+            </template>
             <n-grid :cols="1" :y-gap="8">
               <n-grid-item v-for="sector in filteredLimitUpSectors" :key="sector.sectorName">
                 <n-card size="small" hoverable style="cursor: pointer;">
@@ -476,6 +600,9 @@ function handleDateChange(value) {
         <!-- 右侧：跌停板块 -->
         <n-grid-item>
           <n-card v-if="filteredLimitDownSectors.length > 0" title="跌停板块（跌停数>3）" size="small">
+            <template #header-extra>
+              <n-button size="small" type="info" @click="showLimitStocks('D')">查看跌停股票</n-button>
+            </template>
             <n-grid :cols="1" :y-gap="8">
               <n-grid-item v-for="sector in filteredLimitDownSectors" :key="sector.sectorName">
                 <n-card size="small" hoverable style="cursor: pointer;">
@@ -591,6 +718,19 @@ function handleDateChange(value) {
           </n-scrollbar>
         </n-form-item>
       </n-form>
+    </n-modal>
+
+    <!-- 涨跌停股票列表模态框 -->
+    <n-modal v-model:show="showLimitStocksModal" preset="dialog" :title="limitStocksType === 'U' ? '涨停股票列表' : '跌停股票列表'" style="width: 1000px;">
+      <n-spin :show="limitStocksType === 'U' ? limitUpStocksLoading : limitDownStocksLoading">
+        <n-data-table
+          :columns="limitStocksColumns"
+          :data="limitStocksType === 'U' ? limitUpStocks : limitDownStocks"
+          :loading="limitStocksType === 'U' ? limitUpStocksLoading : limitDownStocksLoading"
+          max-height="500px"
+          scrollbar-props="{ trigger: 'none' }"
+        />
+      </n-spin>
     </n-modal>
 
     <!-- AI复盘模态框 -->

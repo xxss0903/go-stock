@@ -106,6 +106,10 @@ export function GetIndustryRank(arg1, arg2) {
   return window['go']['main']['App']['GetIndustryRank'](arg1, arg2);
 }
 
+export function GetLimitListFromTushare(arg1, arg2) {
+  return window['go']['main']['App']['GetLimitListFromTushare'](arg1, arg2);
+}
+
 export function GetLimitUpDownSectors(arg1) {
   return window['go']['main']['App']['GetLimitUpDownSectors'](arg1);
 }
