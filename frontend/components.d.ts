@@ -40,5 +40,6 @@ declare module 'vue' {
     TChatContent: typeof import('@tdesign-vue-next/chat')['ChatContent']
     TChatLoading: typeof import('@tdesign-vue-next/chat')['ChatLoading']
     TChatSender: typeof import('@tdesign-vue-next/chat')['ChatSender']
+    TradingRecord: typeof import('./src/components/trading-record.vue')['default']
   }
 }

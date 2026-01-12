@@ -781,3 +781,25 @@ type THSHotStrategy struct {
 		} `json:"list"`
 	} `json:"result"`
 }
+
+// TradingRecord 炒股复盘记录
+type TradingRecord struct {
+	gorm.Model
+	TradeDate      string                `json:"tradeDate" gorm:"index"`      // 交易日期
+	Summary        string                `json:"summary"`                      // 当日总结
+	Review         string                `json:"review"`                       // 复盘内容
+	LimitUpSectors string                `json:"limitUpSectors"`               // 涨停板块信息（JSON格式）
+	LimitDownSectors string              `json:"limitDownSectors"`            // 跌停板块信息（JSON格式）
+	IsDel          soft_delete.DeletedAt `gorm:"softDelete:flag"`
+}
+
+func (TradingRecord) TableName() string {
+	return "trading_record"
+}
+
+// LimitUpDownSector 涨停跌停板块信息
+type LimitUpDownSector struct {
+	SectorName string   `json:"sectorName"` // 板块名称
+	StockCount int      `json:"stockCount"` // 涨停/跌停股票数量
+	Stocks     []string `json:"stocks"`     // 股票代码列表
+}

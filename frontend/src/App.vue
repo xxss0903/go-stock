@@ -27,6 +27,7 @@ import {
   SparklesOutline,
   StarOutline,
   Wallet, WarningOutline,
+  DocumentTextOutline,
 } from '@vicons/ionicons5'
 import {AnalyzeSentiment, GetConfig, GetGroupList,GetVersionInfo} from "../wailsjs/go/main/App";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
@@ -394,6 +395,26 @@ const menuOptions = ref([
         icon: renderIcon(FirefoxBrowser),
       },
     ]
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'trading-record',
+                query: {
+                  name:"炒股复盘",
+                },
+                onClick: () => {
+                  activeKey.value = 'trading-record'
+                },
+              }
+            },
+            {default: () => '炒股复盘'}
+        ),
+    key: 'trading-record',
+    icon: renderIcon(DocumentTextOutline),
   },
   {
     label: () =>

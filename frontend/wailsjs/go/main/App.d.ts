@@ -26,7 +26,11 @@ export function CheckUpdate(arg1:number):Promise<void>;
 
 export function ClsCalendar():Promise<Array<any>>;
 
+export function CreateTradingRecord(arg1:models.TradingRecord):Promise<string>;
+
 export function DelPrompt(arg1:number):Promise<string>;
+
+export function DeleteTradingRecord(arg1:number):Promise<string>;
 
 export function EMDictCode(arg1:string):Promise<Array<any>>;
 
@@ -52,6 +56,8 @@ export function GetIndustryMoneyRankSina(arg1:string,arg2:string):Promise<Array<
 
 export function GetIndustryRank(arg1:string,arg2:number):Promise<Array<any>>;
 
+export function GetLimitUpDownSectors(arg1:string):Promise<Record<string, any>>;
+
 export function GetMoneyRankSina(arg1:string):Promise<Array<Record<string, any>>>;
 
 export function GetPromptTemplates(arg1:string,arg2:string):Promise<any>;
@@ -69,6 +75,12 @@ export function GetStockMinutePriceLineData(arg1:string,arg2:string):Promise<Rec
 export function GetStockMoneyTrendByDay(arg1:string,arg2:number):Promise<Array<Record<string, any>>>;
 
 export function GetTelegraphList(arg1:string):Promise<any>;
+
+export function GetTradingRecord(arg1:number):Promise<models.TradingRecord>;
+
+export function GetTradingRecordByDate(arg1:string):Promise<models.TradingRecord>;
+
+export function GetTradingRecordList(arg1:number,arg2:number):Promise<Record<string, any>>;
 
 export function GetVersionInfo():Promise<models.VersionInfo>;
 
@@ -139,3 +151,5 @@ export function UpdateConfig(arg1:data.SettingConfig):Promise<string>;
 export function UpdateGroup(arg1:number,arg2:string):Promise<string>;
 
 export function UpdateGroupSort(arg1:number,arg2:number):Promise<boolean>;
+
+export function UpdateTradingRecord(arg1:models.TradingRecord):Promise<string>;

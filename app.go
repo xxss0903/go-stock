@@ -1383,6 +1383,91 @@ func (a *App) OpenURL(url string) {
 	runtime.BrowserOpenURL(a.ctx, url)
 }
 
+// GetLimitUpDownSectors 获取涨停跌停板块信息
+func (a *App) GetLimitUpDownSectors(tradeDate string) map[string]any {
+	limitUpSectors, limitDownSectors, err := data.NewTradingRecordApi().GetLimitUpDownSectors(tradeDate)
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取涨停跌停板块信息失败: %s", err.Error())
+		return map[string]any{
+			"limitUpSectors":   []models.LimitUpDownSector{},
+			"limitDownSectors": []models.LimitUpDownSector{},
+			"error":            err.Error(),
+		}
+	}
+	return map[string]any{
+		"limitUpSectors":   limitUpSectors,
+		"limitDownSectors": limitDownSectors,
+		"error":            "",
+	}
+}
+
+// CreateTradingRecord 创建复盘记录
+func (a *App) CreateTradingRecord(record models.TradingRecord) string {
+	err := data.NewTradingRecordApi().CreateTradingRecord(&record)
+	if err != nil {
+		logger.SugaredLogger.Errorf("创建复盘记录失败: %s", err.Error())
+		return "创建失败: " + err.Error()
+	}
+	return "创建成功"
+}
+
+// UpdateTradingRecord 更新复盘记录
+func (a *App) UpdateTradingRecord(record models.TradingRecord) string {
+	err := data.NewTradingRecordApi().UpdateTradingRecord(&record)
+	if err != nil {
+		logger.SugaredLogger.Errorf("更新复盘记录失败: %s", err.Error())
+		return "更新失败: " + err.Error()
+	}
+	return "更新成功"
+}
+
+// DeleteTradingRecord 删除复盘记录
+func (a *App) DeleteTradingRecord(id uint) string {
+	err := data.NewTradingRecordApi().DeleteTradingRecord(id)
+	if err != nil {
+		logger.SugaredLogger.Errorf("删除复盘记录失败: %s", err.Error())
+		return "删除失败: " + err.Error()
+	}
+	return "删除成功"
+}
+
+// GetTradingRecord 获取单条复盘记录
+func (a *App) GetTradingRecord(id uint) *models.TradingRecord {
+	record, err := data.NewTradingRecordApi().GetTradingRecord(id)
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取复盘记录失败: %s", err.Error())
+		return nil
+	}
+	return record
+}
+
+// GetTradingRecordByDate 根据日期获取复盘记录
+func (a *App) GetTradingRecordByDate(tradeDate string) *models.TradingRecord {
+	record, err := data.NewTradingRecordApi().GetTradingRecordByDate(tradeDate)
+	if err != nil {
+		return nil
+	}
+	return record
+}
+
+// GetTradingRecordList 获取复盘记录列表
+func (a *App) GetTradingRecordList(page, pageSize int) map[string]any {
+	records, total, err := data.NewTradingRecordApi().GetTradingRecordList(page, pageSize)
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取复盘记录列表失败: %s", err.Error())
+		return map[string]any{
+			"records": []models.TradingRecord{},
+			"total":   0,
+			"error":   err.Error(),
+		}
+	}
+	return map[string]any{
+		"records": records,
+		"total":   total,
+		"error":   "",
+	}
+}
+
 // SaveImage
 //
 //	@Description: 跨平台保存图片

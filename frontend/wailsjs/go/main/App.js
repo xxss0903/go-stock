@@ -46,8 +46,16 @@ export function ClsCalendar() {
   return window['go']['main']['App']['ClsCalendar']();
 }
 
+export function CreateTradingRecord(arg1) {
+  return window['go']['main']['App']['CreateTradingRecord'](arg1);
+}
+
 export function DelPrompt(arg1) {
   return window['go']['main']['App']['DelPrompt'](arg1);
+}
+
+export function DeleteTradingRecord(arg1) {
+  return window['go']['main']['App']['DeleteTradingRecord'](arg1);
 }
 
 export function EMDictCode(arg1) {
@@ -98,6 +106,10 @@ export function GetIndustryRank(arg1, arg2) {
   return window['go']['main']['App']['GetIndustryRank'](arg1, arg2);
 }
 
+export function GetLimitUpDownSectors(arg1) {
+  return window['go']['main']['App']['GetLimitUpDownSectors'](arg1);
+}
+
 export function GetMoneyRankSina(arg1) {
   return window['go']['main']['App']['GetMoneyRankSina'](arg1);
 }
@@ -132,6 +144,18 @@ export function GetStockMoneyTrendByDay(arg1, arg2) {
 
 export function GetTelegraphList(arg1) {
   return window['go']['main']['App']['GetTelegraphList'](arg1);
+}
+
+export function GetTradingRecord(arg1) {
+  return window['go']['main']['App']['GetTradingRecord'](arg1);
+}
+
+export function GetTradingRecordByDate(arg1) {
+  return window['go']['main']['App']['GetTradingRecordByDate'](arg1);
+}
+
+export function GetTradingRecordList(arg1, arg2) {
+  return window['go']['main']['App']['GetTradingRecordList'](arg1, arg2);
 }
 
 export function GetVersionInfo() {
@@ -272,4 +296,8 @@ export function UpdateGroup(arg1, arg2) {
 
 export function UpdateGroupSort(arg1, arg2) {
   return window['go']['main']['App']['UpdateGroupSort'](arg1, arg2);
+}
+
+export function UpdateTradingRecord(arg1) {
+  return window['go']['main']['App']['UpdateTradingRecord'](arg1);
 }
