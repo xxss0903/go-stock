@@ -3,6 +3,7 @@ import {computed, h, nextTick, onBeforeMount, onBeforeUnmount, onMounted, reacti
 import * as echarts from 'echarts';
 import {
   AddGroup,
+  AddPrompt,
   AddStockGroup,
   Follow,
   GetAiConfigs,
@@ -125,7 +126,7 @@ const addBTN = ref(true)
 const editingGroupId = ref(null) // 正在编辑的分组ID
 const editingGroupName = ref('') // 正在编辑的分组名称
 const isSavingGroupName = ref(false) // 是否正在保存分组名称
-const enableTools = ref(false)
+const enableTools = ref(true) // 默认开启AI调用函数功能
 const thinkingMode = ref(false)
 const formModel = ref({
   name: "",
@@ -2044,6 +2045,12 @@ function reAiSummary() {
   aiSummary.value = ""
   summaryModal.value = true
   aiSummaryLoading.value = true
+  
+  // 保存prompt到历史记录
+  if (aiSummaryQuestion.value && aiSummaryQuestion.value.trim()) {
+    savePromptToHistory(aiSummaryQuestion.value, 'AI总结')
+  }
+  
   SummaryStockNews(aiSummaryQuestion.value, aiSummaryConfigId.value, aiSummarySysPromptId.value, enableTools.value, thinkingMode.value)
 }
 
@@ -2195,6 +2202,11 @@ function executeAiStockSelect() {
 
 请开始筛选。`
 
+  // 保存prompt到历史记录
+  if (aiStockSelectCondition.value && aiStockSelectCondition.value.trim()) {
+    savePromptToHistory(aiStockSelectCondition.value, 'AI选股')
+  }
+  
   // 调用AI分析
   SummaryStockNews(stockSelectPrompt, aiStockSelectConfigId.value, aiStockSelectSysPromptId.value, enableTools.value, thinkingMode.value)
 }
@@ -2548,6 +2560,50 @@ function saveGroupName(groupId) {
 function cancelEditGroup() {
   editingGroupId.value = null
   editingGroupName.value = ''
+}
+
+// 保存prompt到历史记录
+function savePromptToHistory(promptContent, promptType) {
+  if (!promptContent || !promptContent.trim()) {
+    return
+  }
+  
+  const trimmedContent = promptContent.trim()
+  
+  // 生成prompt名称（截取前30个字符）
+  let promptName = trimmedContent
+  if (promptName.length > 30) {
+    promptName = promptName.substring(0, 30) + '...'
+  }
+  promptName = `${promptType}-${promptName}`
+  
+  // 检查是否已存在相同的prompt（避免重复保存）
+  const exists = promptTemplates.value && promptTemplates.value.some(t => 
+    t.type === '模型用户Prompt' && t.content === trimmedContent
+  )
+  
+  if (!exists) {
+    // 保存为"模型用户Prompt"类型
+    AddPrompt({
+      ID: 0,
+      Name: promptName,
+      Content: trimmedContent,
+      Type: '模型用户Prompt'
+    }).then(result => {
+      // 静默保存，不显示提示，避免打扰用户
+      console.log('Prompt已保存到历史记录:', promptName)
+      // 刷新prompt模板列表
+      GetPromptTemplates("", "").then(res => {
+        if (res) {
+          promptTemplates.value = res
+          sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
+          userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
+        }
+      })
+    }).catch(error => {
+      console.error('保存prompt失败:', error)
+    })
+  }
 }
 
 function updateTab(name) {
