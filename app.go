@@ -103,7 +103,7 @@ func AddTools(tools []data.Tool) []data.Tool {
 					},
 					"stockCode": map[string]any{
 						"type":        "string",
-						"description": "股票代码（A股：sh,sz开头;港股hk开头,美股：us开头）",
+						"description": "股票代码（A股：sh,sz开头）",
 					},
 				},
 				Required: []string{"days", "stockCode"},
@@ -603,25 +603,6 @@ func (a *App) domReady(ctx context.Context) {
 		}
 	}()
 
-	//刷新基金净值信息
-	go func() {
-		//ticker := time.NewTicker(time.Second * time.Duration(60))
-		//defer ticker.Stop()
-		//for range ticker.C {
-		//	MonitorFundPrices(a)
-		//}
-		if config.EnableFund {
-			id, err := a.cron.AddFunc(fmt.Sprintf("@every %ds", 60), func() {
-				MonitorFundPrices(a)
-			})
-			if err != nil {
-				logger.SugaredLogger.Errorf("AddFunc error:%s", err.Error())
-			} else {
-				a.cronEntrys["MonitorFundPrices"] = id
-			}
-		}
-
-	}()
 
 	if config.EnableNews {
 		//go func() {
@@ -651,10 +632,6 @@ func (a *App) domReady(ctx context.Context) {
 		go runtime.EventsEmit(a.ctx, "telegraph", refreshTelegraphList())
 	}
 	go MonitorStockPrices(a)
-	if config.EnableFund {
-		go MonitorFundPrices(a)
-		go data.NewFundApi().AllFund()
-	}
 	//检查新版本
 	go func() {
 		a.CheckUpdate(0)
@@ -740,57 +717,6 @@ func (a *App) CheckStockBaseInfo(ctx context.Context) {
 	//	}
 	//}
 
-	stockHKBasics := &[]models.StockInfoHK{}
-	resty.New().R().
-		SetHeader("user", "go-stock").
-		SetResult(stockHKBasics).
-		Get("http://8.134.249.145:18080/go-stock/stock_base_info_hk.json")
-
-	db.Dao.Unscoped().Model(&models.StockInfoHK{}).Where("1=1").Delete(&models.StockInfoHK{})
-	err = db.Dao.CreateInBatches(stockHKBasics, 400).Error
-	if err != nil {
-		logger.SugaredLogger.Errorf("保存StockInfoHK股票基础信息失败:%s", err.Error())
-	}
-
-	//for _, stock := range *stockHKBasics {
-	//	stockInfo := &models.StockInfoHK{
-	//		Code:   stock.Code,
-	//		Name:   stock.Name,
-	//		BKName: stock.BKName,
-	//		BKCode: stock.BKCode,
-	//	}
-	//	db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", stock.Code).First(stockInfo)
-	//	if stockInfo.ID == 0 {
-	//		db.Dao.Model(&models.StockInfoHK{}).Create(stockInfo)
-	//	} else {
-	//		db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", stock.Code).Updates(stockInfo)
-	//	}
-	//}
-	stockUSBasics := &[]models.StockInfoUS{}
-	resty.New().R().
-		SetHeader("user", "go-stock").
-		SetResult(stockUSBasics).
-		Get("http://8.134.249.145:18080/go-stock/stock_base_info_us.json")
-
-	db.Dao.Unscoped().Model(&models.StockInfoUS{}).Where("1=1").Delete(&models.StockInfoUS{})
-	err = db.Dao.CreateInBatches(stockUSBasics, 400).Error
-	if err != nil {
-		logger.SugaredLogger.Errorf("保存StockInfoUS股票基础信息失败:%s", err.Error())
-	}
-	//for _, stock := range *stockUSBasics {
-	//	stockInfo := &models.StockInfoUS{
-	//		Code:   stock.Code,
-	//		Name:   stock.Name,
-	//		BKName: stock.BKName,
-	//		BKCode: stock.BKCode,
-	//	}
-	//	db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", stock.Code).First(stockInfo)
-	//	if stockInfo.ID == 0 {
-	//		db.Dao.Model(&models.StockInfoUS{}).Create(stockInfo)
-	//	} else {
-	//		db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", stock.Code).Updates(stockInfo)
-	//	}
-	//}
 
 }
 func (a *App) NewsPush(news *[]models.Telegraph) {
@@ -898,83 +824,6 @@ func isTradingTime(date time.Time) bool {
 	return false
 }
 
-// IsHKTradingTime 判断当前时间是否在港股交易时间内
-func IsHKTradingTime(date time.Time) bool {
-	hour, minute, _ := date.Clock()
-
-	// 开市前竞价时段：09:00 - 09:30
-	if (hour == 9 && minute >= 0) || (hour == 9 && minute <= 30) {
-		return true
-	}
-
-	// 上午持续交易时段：09:30 - 12:00
-	if (hour == 9 && minute > 30) || (hour >= 10 && hour < 12) || (hour == 12 && minute == 0) {
-		return true
-	}
-
-	// 下午持续交易时段：13:00 - 16:00
-	if (hour == 13 && minute >= 0) || (hour >= 14 && hour < 16) || (hour == 16 && minute == 0) {
-		return true
-	}
-
-	// 收市竞价交易时段：16:00 - 16:10
-	if (hour == 16 && minute >= 0) || (hour == 16 && minute <= 10) {
-		return true
-	}
-	return false
-}
-
-// IsUSTradingTime 判断当前时间是否在美股交易时间内
-func IsUSTradingTime(date time.Time) bool {
-	// 获取美国东部时区
-	est, err := time.LoadLocation("America/New_York")
-	var estTime time.Time
-	if err != nil {
-		estTime = date.Add(time.Hour * -12)
-	} else {
-		// 将当前时间转换为美国东部时间
-		estTime = date.In(est)
-	}
-
-	// 判断是否是周末
-	weekday := estTime.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return false
-	}
-
-	// 获取小时和分钟
-	hour, minute, _ := estTime.Clock()
-
-	// 判断是否在4:00 AM到9:30 AM之间（盘前）
-	if (hour == 4) || (hour == 5) || (hour == 6) || (hour == 7) || (hour == 8) || (hour == 9 && minute < 30) {
-		return true
-	}
-
-	// 判断是否在9:30 AM到4:00 PM之间（盘中）
-	if (hour == 9 && minute >= 30) || (hour >= 10 && hour < 16) || (hour == 16 && minute == 0) {
-		return true
-	}
-
-	// 判断是否在4:00 PM到8:00 PM之间（盘后）
-	if (hour == 16 && minute > 0) || (hour >= 17 && hour < 20) || (hour == 20 && minute == 0) {
-		return true
-	}
-
-	return false
-}
-func MonitorFundPrices(a *App) {
-	dest := &[]data.FollowedFund{}
-	db.Dao.Model(&data.FollowedFund{}).Find(dest)
-	for _, follow := range *dest {
-		_, err := data.NewFundApi().CrawlFundBasic(follow.Code)
-		if err != nil {
-			logger.SugaredLogger.Errorf("获取基金基本信息失败，基金代码：%s，错误信息：%s", follow.Code, err.Error())
-			continue
-		}
-		data.NewFundApi().CrawlFundNetEstimatedUnit(follow.Code)
-		data.NewFundApi().CrawlFundNetUnitValue(follow.Code)
-	}
-}
 
 func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 	stockInfos := make([]data.StockInfo, 0)
@@ -983,21 +832,11 @@ func GetStockInfos(follows ...data.FollowedStock) *[]data.StockInfo {
 		if strutil.HasPrefixAny(follow.StockCode, []string{"SZ", "SH", "sh", "sz"}) && (!isTradingTime(time.Now())) {
 			continue
 		}
-		if strutil.HasPrefixAny(follow.StockCode, []string{"hk", "HK"}) && (!IsHKTradingTime(time.Now())) {
-			continue
-		}
-		if strutil.HasPrefixAny(follow.StockCode, []string{"us", "US", "gb_"}) && (!IsUSTradingTime(time.Now())) {
-			continue
-		}
 		stockCodes = append(stockCodes, follow.StockCode)
 	}
 	stockData, _ := data.NewStockDataApi().GetStockCodeRealTimeData(stockCodes...)
 	for _, info := range *stockData {
 		v, ok := slice.FindBy(follows, func(idx int, follow data.FollowedStock) bool {
-			if strutil.HasPrefixAny(follow.StockCode, []string{"US", "us"}) {
-				return strings.ToLower(strings.Replace(follow.StockCode, "us", "gb_", 1)) == info.Code
-			}
-
 			return follow.StockCode == info.Code
 		})
 		if ok {
@@ -1158,12 +997,6 @@ func (a *App) SendDingDingMessageByType(message string, stockCode string, msgTyp
 
 	if strutil.HasPrefixAny(stockCode, []string{"SZ", "SH", "sh", "sz"}) && (!isTradingTime(time.Now())) {
 		return "非A股交易时间"
-	}
-	if strutil.HasPrefixAny(stockCode, []string{"hk", "HK"}) && (!IsHKTradingTime(time.Now())) {
-		return "非港股交易时间"
-	}
-	if strutil.HasPrefixAny(stockCode, []string{"us", "US", "gb_"}) && (!IsUSTradingTime(time.Now())) {
-		return "非美股交易时间"
 	}
 
 	ttl, _ := a.cache.TTL([]byte(stockCode))
@@ -1365,18 +1198,6 @@ func (a *App) ShareAnalysis(stockCode, stockName string) string {
 	}
 }
 
-func (a *App) GetfundList(key string) []data.FundBasic {
-	return data.NewFundApi().GetFundList(key)
-}
-func (a *App) GetFollowedFund() []data.FollowedFund {
-	return data.NewFundApi().GetFollowedFund()
-}
-func (a *App) FollowFund(fundCode string) string {
-	return data.NewFundApi().FollowFund(fundCode)
-}
-func (a *App) UnFollowFund(fundCode string) string {
-	return data.NewFundApi().UnFollowFund(fundCode)
-}
 func (a *App) SaveAsMarkdown(stockCode, stockName string) string {
 	res := data.NewDeepSeekOpenAi(a.ctx, 0).GetAIResponseResult(stockCode)
 	if res != nil && len(res.Content) > 100 {
@@ -1417,11 +1238,6 @@ func (a *App) DelPrompt(id uint) string {
 }
 func (a *App) SetStockAICron(cronText, stockCode string) {
 	data.NewStockDataApi().SetStockAICron(cronText, stockCode)
-	if strutil.HasPrefixAny(stockCode, []string{"gb_"}) {
-		stockCode = strings.ToUpper(stockCode)
-		stockCode = strings.Replace(stockCode, "gb_", "us", 1)
-		stockCode = strings.Replace(stockCode, "GB_", "us", 1)
-	}
 	if entryID, exists := a.cronEntrys[stockCode]; exists {
 		a.cron.Remove(entryID)
 	}
@@ -1491,7 +1307,7 @@ func (a *App) UpdateGroup(groupId int, name string) string {
 }
 
 func (a *App) GetStockKLine(stockCode, stockName string, days int64) *[]data.KLineData {
-	return data.NewStockDataApi().GetHK_KLineData(stockCode, "day", days)
+	return data.NewStockDataApi().GetKLineData(stockCode, "240", days)
 }
 
 func (a *App) GetStockMinutePriceLineData(stockCode, stockName string) map[string]any {

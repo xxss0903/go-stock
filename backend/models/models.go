@@ -166,37 +166,6 @@ func (receiver VersionInfo) TableName() string {
 	return "version_info"
 }
 
-type StockInfoHK struct {
-	gorm.Model
-	Code     string                `json:"code"`
-	Name     string                `json:"name"`
-	FullName string                `json:"fullName"`
-	EName    string                `json:"eName"`
-	IsDel    soft_delete.DeletedAt `gorm:"softDelete:flag"`
-	BKName   string                `json:"bk_name"`
-	BKCode   string                `json:"bk_code"`
-}
-
-func (receiver StockInfoHK) TableName() string {
-	return "stock_base_info_hk"
-}
-
-type StockInfoUS struct {
-	gorm.Model
-	Code     string                `json:"code"`
-	Name     string                `json:"name"`
-	FullName string                `json:"fullName"`
-	EName    string                `json:"eName"`
-	Exchange string                `json:"exchange"`
-	Type     string                `json:"type"`
-	IsDel    soft_delete.DeletedAt `gorm:"softDelete:flag"`
-	BKName   string                `json:"bk_name"`
-	BKCode   string                `json:"bk_code"`
-}
-
-func (receiver StockInfoUS) TableName() string {
-	return "stock_base_info_us"
-}
 
 type Resp struct {
 	Code    int    `json:"code"`

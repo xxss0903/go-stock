@@ -44,11 +44,6 @@ var wxgzh []byte
 //go:embed build/stock_basic.json
 var stocksBin []byte
 
-//go:embed build/stock_base_info_hk.json
-var stocksBinHK []byte
-
-//go:embed build/stock_base_info_us.json
-var stocksBinUS []byte
 
 //go:generate cp -R ./data ./build/bin
 
@@ -228,10 +223,6 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&data.IndexBasic{})
 	db.Dao.AutoMigrate(&data.Settings{})
 	db.Dao.AutoMigrate(&models.AIResponseResult{})
-	db.Dao.AutoMigrate(&models.StockInfoHK{})
-	db.Dao.AutoMigrate(&models.StockInfoUS{})
-	db.Dao.AutoMigrate(&data.FollowedFund{})
-	db.Dao.AutoMigrate(&data.FundBasic{})
 	db.Dao.AutoMigrate(&models.PromptTemplate{})
 	db.Dao.AutoMigrate(&data.Group{})
 	db.Dao.AutoMigrate(&data.GroupStock{})
@@ -247,58 +238,6 @@ func AutoMigrate() {
 	updateMultipleModel()
 }
 
-func initStockDataUS(ctx context.Context) {
-	defer func() {
-		go runtime.EventsEmit(ctx, "loadingMsg", "done")
-	}()
-	var v []models.StockInfoUS
-	err := json.Unmarshal(stocksBinUS, &v)
-	if err != nil {
-		log.SugaredLogger.Error(err.Error())
-		return
-	}
-	log.SugaredLogger.Infof("init stock data us %d", len(v))
-	var total int64
-	db.Dao.Model(&models.StockInfoUS{}).Count(&total)
-	if total != int64(len(v)) {
-		for _, item := range v {
-			var count int64
-			db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", item.Code).Count(&count)
-			if count > 0 {
-				//log.SugaredLogger.Infof("stock data us %s exist", item.Code)
-				continue
-			}
-			db.Dao.Model(&models.StockInfoUS{}).Create(&item)
-		}
-	}
-}
-
-func initStockDataHK(ctx context.Context) {
-	defer func() {
-		go runtime.EventsEmit(ctx, "loadingMsg", "done")
-	}()
-	var v []models.StockInfoHK
-	err := json.Unmarshal(stocksBinHK, &v)
-	if err != nil {
-		log.SugaredLogger.Error(err.Error())
-		return
-	}
-	log.SugaredLogger.Infof("init stock data hk %d", len(v))
-	var total int64
-	db.Dao.Model(&models.StockInfoHK{}).Count(&total)
-	if total != int64(len(v)) {
-		for _, item := range v {
-			var count int64
-			db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", item.Code).Count(&count)
-			if count > 0 {
-				//log.SugaredLogger.Infof("stock data hk %s exist", item.Code)
-				continue
-			}
-			db.Dao.Model(&models.StockInfoHK{}).Create(&item)
-		}
-	}
-
-}
 
 func updateBasicInfo() {
 	config := data.GetSettingConfig()

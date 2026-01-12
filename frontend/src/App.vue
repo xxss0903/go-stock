@@ -43,7 +43,6 @@ const loading = ref(true)
 const loadingMsg = ref("加载数据中...")
 const enableNews = ref(false)
 const contentStyle = ref("")
-const enableFund = ref(false)
 const enableAgent = ref(false)
 const enableDarkTheme = ref(null)
 const content = ref('未经授权,禁止商业目的!\n\n数据来源于网络,仅供参考;投资有风险,入市需谨慎')
@@ -402,35 +401,6 @@ const menuOptions = ref([
             RouterLink,
             {
               to: {
-                name: 'fund',
-                query: {
-                  name: '基金自选',
-                },
-              },
-              onClick: () => {
-                activeKey.value = 'fund'
-              },
-            },
-            {default: () => '基金自选',}
-        ),
-    show: enableFund.value,
-    key: 'fund',
-    icon: renderIcon(SparklesOutline),
-    children: [
-      {
-        label: () => h(NText, {type: realtimeProfit.value > 0 ? 'error' : 'success'}, {default: () => '功能完善中！'}),
-        key: 'realtimeProfit',
-        show: realtimeProfit.value,
-        icon: renderIcon(AlarmOutline),
-      },
-    ]
-  },
-  {
-    label: () =>
-        h(
-            RouterLink,
-            {
-              to: {
                 name: 'agent',
                 query: {
                   name:"Ai智能体",
@@ -650,13 +620,9 @@ onBeforeMount(() => {
 
   GetConfig().then((res) => {
     //console.log(res)
-    enableFund.value = res.enableFund
     enableAgent.value = res.enableAgent
 
     menuOptions.value.filter((item) => {
-      if (item.key === 'fund') {
-        item.show = res.enableFund
-      }
       if (item.key === 'agent') {
         item.show = res.enableAgent
       }
@@ -677,7 +643,6 @@ onMounted(() => {
     if (res.enableNews) {
       enableNews.value = true
     }
-    enableFund.value = res.enableFund
     enableAgent.value = res.enableAgent
     const {notification } =createDiscreteApi(["notification"], {
       configProviderProps: {
