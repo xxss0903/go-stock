@@ -1,5 +1,5 @@
 <script setup>
-import {h, onBeforeMount, onMounted, reactive, ref} from "vue";
+import {computed, h, onBeforeMount, onMounted, reactive, ref} from "vue";
 import {
   CreateTradingRecord,
   DeleteTradingRecord,
@@ -16,6 +16,8 @@ import {
   NDatePicker,
   NForm,
   NFormItem,
+  NGrid,
+  NGridItem,
   NInput,
   NInputNumber,
   NModal,
@@ -38,6 +40,20 @@ const records = ref([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(10);
+
+// 计算属性：只显示涨停数大于3的板块，并按涨停数降序排序
+const filteredLimitUpSectors = computed(() => {
+  return limitUpSectors.value
+    .filter(sector => sector.stockCount > 3)
+    .sort((a, b) => b.stockCount - a.stockCount);
+});
+
+// 计算属性：只显示跌停数大于3的板块，并按跌停数降序排序
+const filteredLimitDownSectors = computed(() => {
+  return limitDownSectors.value
+    .filter(sector => sector.stockCount > 3)
+    .sort((a, b) => b.stockCount - a.stockCount);
+});
 
 const formData = reactive({
   tradeDate: "",
@@ -266,42 +282,73 @@ function handleDateChange(value) {
         </n-form-item>
       </n-form>
 
-      <!-- 涨停板块信息 -->
-      <n-card v-if="limitUpSectors.length > 0" title="涨停板块" style="margin-bottom: 16px;" size="small">
-        <div v-for="sector in limitUpSectors" :key="sector.sectorName" style="margin-bottom: 8px;">
-          <n-tag type="error" style="margin-right: 8px;">{{ sector.sectorName }}</n-tag>
-          <n-text depth="3">涨停数: {{ sector.stockCount }}</n-text>
-          <div style="margin-top: 4px; margin-left: 8px;">
-            <n-tag
-              v-for="stock in sector.stocks"
-              :key="stock"
-              size="small"
-              style="margin-right: 4px; margin-bottom: 4px;"
-            >
-              {{ stock }}
-            </n-tag>
-          </div>
-        </div>
-      </n-card>
+      <!-- 涨停跌停板块信息 - 左右分栏布局 -->
+      <n-grid :cols="2" :x-gap="16" style="margin-bottom: 16px;">
+        <!-- 左侧：涨停板块 -->
+        <n-grid-item>
+          <n-card v-if="filteredLimitUpSectors.length > 0" title="涨停板块（涨停数>3）" size="small">
+            <n-grid :cols="1" :y-gap="8">
+              <n-grid-item v-for="sector in filteredLimitUpSectors" :key="sector.sectorName">
+                <n-card size="small" hoverable style="cursor: pointer;">
+                  <template #header>
+                    <n-tag type="error" size="small">{{ sector.sectorName }}</n-tag>
+                  </template>
+                  <n-text strong type="error" style="font-size: 16px;">{{ sector.stockCount }}只涨停</n-text>
+                  <div style="margin-top: 8px;">
+                    <n-tag
+                      v-for="(stock, index) in sector.stocks.slice(0, 5)"
+                      :key="stock"
+                      size="small"
+                      style="margin-right: 4px; margin-bottom: 4px; display: inline-block;"
+                    >
+                      {{ stock }}
+                    </n-tag>
+                    <n-text v-if="sector.stocks.length > 5" depth="3" style="font-size: 12px;">
+                      等{{ sector.stocks.length }}只
+                    </n-text>
+                  </div>
+                </n-card>
+              </n-grid-item>
+            </n-grid>
+          </n-card>
+          <n-card v-else title="涨停板块（涨停数>3）" size="small">
+            <n-text depth="3">暂无涨停板块数据</n-text>
+          </n-card>
+        </n-grid-item>
 
-      <!-- 跌停板块信息 -->
-      <n-card v-if="limitDownSectors.length > 0" title="跌停板块" style="margin-bottom: 16px;" size="small">
-        <div v-for="sector in limitDownSectors" :key="sector.sectorName" style="margin-bottom: 8px;">
-          <n-tag type="info" style="margin-right: 8px;">{{ sector.sectorName }}</n-tag>
-          <n-text depth="3">跌停数: {{ sector.stockCount }}</n-text>
-          <div style="margin-top: 4px; margin-left: 8px;">
-            <n-tag
-              v-for="stock in sector.stocks"
-              :key="stock"
-              size="small"
-              type="info"
-              style="margin-right: 4px; margin-bottom: 4px;"
-            >
-              {{ stock }}
-            </n-tag>
-          </div>
-        </div>
-      </n-card>
+        <!-- 右侧：跌停板块 -->
+        <n-grid-item>
+          <n-card v-if="filteredLimitDownSectors.length > 0" title="跌停板块（跌停数>3）" size="small">
+            <n-grid :cols="1" :y-gap="8">
+              <n-grid-item v-for="sector in filteredLimitDownSectors" :key="sector.sectorName">
+                <n-card size="small" hoverable style="cursor: pointer;">
+                  <template #header>
+                    <n-tag type="info" size="small">{{ sector.sectorName }}</n-tag>
+                  </template>
+                  <n-text strong type="info" style="font-size: 16px;">{{ sector.stockCount }}只跌停</n-text>
+                  <div style="margin-top: 8px;">
+                    <n-tag
+                      v-for="(stock, index) in sector.stocks.slice(0, 5)"
+                      :key="stock"
+                      size="small"
+                      type="info"
+                      style="margin-right: 4px; margin-bottom: 4px; display: inline-block;"
+                    >
+                      {{ stock }}
+                    </n-tag>
+                    <n-text v-if="sector.stocks.length > 5" depth="3" style="font-size: 12px;">
+                      等{{ sector.stocks.length }}只
+                    </n-text>
+                  </div>
+                </n-card>
+              </n-grid-item>
+            </n-grid>
+          </n-card>
+          <n-card v-else title="跌停板块（跌停数>3）" size="small">
+            <n-text depth="3">暂无跌停板块数据</n-text>
+          </n-card>
+        </n-grid-item>
+      </n-grid>
 
       <!-- 记录列表 -->
       <n-data-table
@@ -362,22 +409,28 @@ function handleDateChange(value) {
         </n-form-item>
         <n-form-item label="涨停板块">
           <n-scrollbar style="max-height: 200px;">
-            <div v-if="limitUpSectors.length > 0">
-              <div v-for="sector in limitUpSectors" :key="sector.sectorName" style="margin-bottom: 8px;">
-                <n-tag type="error">{{ sector.sectorName }} ({{ sector.stockCount }})</n-tag>
-              </div>
-            </div>
-            <n-text v-else depth="3">暂无涨停板块数据</n-text>
+            <n-grid v-if="filteredLimitUpSectors.length > 0" :cols="2" :x-gap="8" :y-gap="8">
+              <n-grid-item v-for="sector in filteredLimitUpSectors" :key="sector.sectorName">
+                <n-card size="small" style="padding: 8px;">
+                  <n-tag type="error" size="small">{{ sector.sectorName }}</n-tag>
+                  <n-text strong type="error" style="margin-left: 8px;">{{ sector.stockCount }}只</n-text>
+                </n-card>
+              </n-grid-item>
+            </n-grid>
+            <n-text v-else depth="3">暂无涨停板块数据（涨停数>3）</n-text>
           </n-scrollbar>
         </n-form-item>
         <n-form-item label="跌停板块">
           <n-scrollbar style="max-height: 200px;">
-            <div v-if="limitDownSectors.length > 0">
-              <div v-for="sector in limitDownSectors" :key="sector.sectorName" style="margin-bottom: 8px;">
-                <n-tag type="info">{{ sector.sectorName }} ({{ sector.stockCount }})</n-tag>
-              </div>
-            </div>
-            <n-text v-else depth="3">暂无跌停板块数据</n-text>
+            <n-grid v-if="filteredLimitDownSectors.length > 0" :cols="2" :x-gap="8" :y-gap="8">
+              <n-grid-item v-for="sector in filteredLimitDownSectors" :key="sector.sectorName">
+                <n-card size="small" style="padding: 8px;">
+                  <n-tag type="info" size="small">{{ sector.sectorName }}</n-tag>
+                  <n-text strong type="info" style="margin-left: 8px;">{{ sector.stockCount }}只</n-text>
+                </n-card>
+              </n-grid-item>
+            </n-grid>
+            <n-text v-else depth="3">暂无跌停板块数据（跌停数>3）</n-text>
           </n-scrollbar>
         </n-form-item>
       </n-form>
