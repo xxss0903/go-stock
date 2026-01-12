@@ -107,22 +107,6 @@ func InitAnalyzeSentiment() {
 		}
 	}
 	logger.SugaredLogger.Info("加载股票名称词典成功")
-
-	stockhks := &[]models.StockInfoHK{}
-	db.Dao.Model(&models.StockInfoHK{}).Find(stockhks)
-	for _, stock := range *stockhks {
-		if strutil.Trim(stock.Name) == "" {
-			continue
-		}
-		err := seg.AddToken(stock.Name, basefreq+100, "n")
-		if strutil.Trim(stock.BKName) != "" {
-			err = seg.AddToken(stock.BKName, basefreq+100, "n")
-		}
-		if err != nil {
-			logger.SugaredLogger.Errorf("添加%s失败:%s", stock.Name, err.Error())
-		}
-	}
-	logger.SugaredLogger.Info("加载港股名称词典成功")
 	//stockus := &[]models.StockInfoUS{}
 	//db.Dao.Model(&models.StockInfoUS{}).Where("trim(name) != ?", "").Find(stockus)
 	//for _, stock := range *stockus {

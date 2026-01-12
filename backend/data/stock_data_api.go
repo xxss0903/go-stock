@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
-	"go-stock/backend/models"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -582,12 +581,6 @@ func (receiver StockDataApi) GetStockList(key string) []StockBasic {
 	var result2 []IndexBasic
 	db.Dao.Model(&IndexBasic{}).Where("market in ?", []string{"SSE", "SZSE"}).Where("name like ? or ts_code like ?", "%"+key+"%", "%"+key+"%").Find(&result2)
 
-	var result3 []models.StockInfoHK
-	db.Dao.Model(&models.StockInfoHK{}).Where("name like ? or code like ?", "%"+key+"%", "%"+key+"%").Find(&result3)
-
-	var result4 []models.StockInfoUS
-	db.Dao.Model(&models.StockInfoUS{}).Where("name like ? or code like ? or e_name like ?", "%"+key+"%", "%"+key+"%", "%"+key+"%").Find(&result4)
-
 	for _, item := range result2 {
 		result = append(result, StockBasic{
 			TsCode:   item.TsCode,
@@ -596,22 +589,6 @@ func (receiver StockDataApi) GetStockList(key string) []StockBasic {
 			Symbol:   item.Symbol,
 			Market:   item.Market,
 			ListDate: item.ListDate,
-		})
-	}
-	for _, item := range result3 {
-		result = append(result, StockBasic{
-			TsCode:   item.Code,
-			Name:     item.Name,
-			Fullname: item.Name,
-			Market:   "HK",
-		})
-	}
-	for _, item := range result4 {
-		result = append(result, StockBasic{
-			TsCode:   strings.ToLower(strings.Replace(item.Code, "us", "gb_", 1)),
-			Name:     item.Name,
-			Fullname: item.Name,
-			Market:   "US",
 		})
 	}
 

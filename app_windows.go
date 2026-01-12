@@ -106,12 +106,6 @@ func MonitorStockPrices(a *App) {
 		if strutil.HasPrefixAny(stockInfo.Code, []string{"SZ", "SH", "sh", "sz"}) && (!isTradingTime(time.Now())) {
 			continue
 		}
-		if strutil.HasPrefixAny(stockInfo.Code, []string{"hk", "HK"}) && (!IsHKTradingTime(time.Now())) {
-			continue
-		}
-		if strutil.HasPrefixAny(stockInfo.Code, []string{"us", "US", "gb_"}) && (!IsUSTradingTime(time.Now())) {
-			continue
-		}
 
 		total += stockInfo.ProfitAmountToday
 		price, _ := convertor.ToFloat(stockInfo.Price)

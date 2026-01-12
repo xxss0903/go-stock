@@ -34,8 +34,6 @@ export function ExportConfig():Promise<string>;
 
 export function Follow(arg1:string):Promise<string>;
 
-export function FollowFund(arg1:string):Promise<string>;
-
 export function GetAIResponseResult(arg1:string):Promise<models.AIResponseResult>;
 
 export function GetAiConfigs():Promise<Array<data.AIConfig>>;
@@ -43,8 +41,6 @@ export function GetAiConfigs():Promise<Array<data.AIConfig>>;
 export function GetConfig():Promise<data.SettingConfig>;
 
 export function GetFollowList(arg1:number):Promise<any>;
-
-export function GetFollowedFund():Promise<Array<data.FollowedFund>>;
 
 export function GetGroupList():Promise<Array<data.Group>>;
 
@@ -75,8 +71,6 @@ export function GetStockMoneyTrendByDay(arg1:string,arg2:number):Promise<Array<R
 export function GetTelegraphList(arg1:string):Promise<any>;
 
 export function GetVersionInfo():Promise<models.VersionInfo>;
-
-export function GetfundList(arg1:string):Promise<Array<data.FundBasic>>;
 
 export function GlobalStockIndexes():Promise<Record<string, any>>;
 
@@ -139,8 +133,6 @@ export function StockResearchReport(arg1:string):Promise<Array<any>>;
 export function SummaryStockNews(arg1:string,arg2:number,arg3:any,arg4:boolean,arg5:boolean):Promise<void>;
 
 export function UnFollow(arg1:string):Promise<string>;
-
-export function UnFollowFund(arg1:string):Promise<string>;
 
 export function UpdateConfig(arg1:data.SettingConfig):Promise<string>;
 

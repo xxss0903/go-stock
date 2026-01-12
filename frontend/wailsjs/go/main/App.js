@@ -62,10 +62,6 @@ export function Follow(arg1) {
   return window['go']['main']['App']['Follow'](arg1);
 }
 
-export function FollowFund(arg1) {
-  return window['go']['main']['App']['FollowFund'](arg1);
-}
-
 export function GetAIResponseResult(arg1) {
   return window['go']['main']['App']['GetAIResponseResult'](arg1);
 }
@@ -80,10 +76,6 @@ export function GetConfig() {
 
 export function GetFollowList(arg1) {
   return window['go']['main']['App']['GetFollowList'](arg1);
-}
-
-export function GetFollowedFund() {
-  return window['go']['main']['App']['GetFollowedFund']();
 }
 
 export function GetGroupList() {
@@ -144,10 +136,6 @@ export function GetTelegraphList(arg1) {
 
 export function GetVersionInfo() {
   return window['go']['main']['App']['GetVersionInfo']();
-}
-
-export function GetfundList(arg1) {
-  return window['go']['main']['App']['GetfundList'](arg1);
 }
 
 export function GlobalStockIndexes() {
@@ -272,10 +260,6 @@ export function SummaryStockNews(arg1, arg2, arg3, arg4, arg5) {
 
 export function UnFollow(arg1) {
   return window['go']['main']['App']['UnFollow'](arg1);
-}
-
-export function UnFollowFund(arg1) {
-  return window['go']['main']['App']['UnFollowFund'](arg1);
 }
 
 export function UpdateConfig(arg1) {

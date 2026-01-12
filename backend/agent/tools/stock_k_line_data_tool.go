@@ -36,7 +36,7 @@ func (q QueryStockKLine) Info(ctx context.Context) (*schema.ToolInfo, error) {
 			},
 			"stockCode": {
 				Type:     "string",
-				Desc:     "股票代码（A股：sh,sz开头;港股hk开头,美股：us开头）",
+				Desc:     "股票代码（A股：sh,sz开头）",
 				Required: true,
 			},
 		}),
@@ -50,14 +50,8 @@ func (q QueryStockKLine) InvokableRun(ctx context.Context, argumentsInJSON strin
 	if err != nil {
 		toIntDay = 90
 	}
-	if strutil.HasPrefixAny(stockCode, []string{"sz", "sh", "hk", "us", "gb_"}) {
-		K := &[]data.KLineData{}
-		if strutil.HasPrefixAny(stockCode, []string{"sz", "sh"}) {
-			K = data.NewStockDataApi().GetKLineData(stockCode, "240", toIntDay)
-		}
-		if strutil.HasPrefixAny(stockCode, []string{"hk", "us", "gb_"}) {
-			K = data.NewStockDataApi().GetHK_KLineData(stockCode, "day", toIntDay)
-		}
+	if strutil.HasPrefixAny(stockCode, []string{"sz", "sh"}) {
+		K := data.NewStockDataApi().GetKLineData(stockCode, "240", toIntDay)
 		Kmap := &[]map[string]any{}
 		for _, kline := range *K {
 			mapk := make(map[string]any, 6)
@@ -75,6 +69,6 @@ func (q QueryStockKLine) InvokableRun(ctx context.Context, argumentsInJSON strin
 		res := "\r\n ### " + stockCode + " " + convertor.ToString(toIntDay) + "日K线数据：\r\n" + markdownTable + "\r\n"
 		return res, nil
 	} else {
-		return "无数据，可能股票代码错误。（A股：sh,sz开头;港股hk开头,美股：us开头）", fmt.Errorf("不支持的股票代码:%s", stockCode)
+		return "无数据，可能股票代码错误。（A股：sh,sz开头）", fmt.Errorf("不支持的股票代码:%s", stockCode)
 	}
 }

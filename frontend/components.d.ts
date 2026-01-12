@@ -14,7 +14,6 @@ declare module 'vue' {
     AnalyzeMartket: typeof import('./src/components/AnalyzeMartket.vue')['default']
     ClsCalendarTimeLine: typeof import('./src/components/ClsCalendarTimeLine.vue')['default']
     EmbeddedUrl: typeof import('./src/components/EmbeddedUrl.vue')['default']
-    Fund: typeof import('./src/components/fund.vue')['default']
     HotEvents: typeof import('./src/components/HotEvents.vue')['default']
     HotStockList: typeof import('./src/components/HotStockList.vue')['default']
     HotTopics: typeof import('./src/components/HotTopics.vue')['default']
