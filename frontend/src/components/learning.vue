@@ -1,14 +1,17 @@
 <script setup>
 import { computed, nextTick, reactive, ref } from 'vue'
 import {
+  NAutoComplete,
   NAlert,
   NButton,
   NCard,
+  NDatePicker,
   NEmpty,
   NFormItem,
   NGrid,
   NGi,
   NIcon,
+  NInput,
   NInputNumber,
   NList,
   NListItem,
@@ -18,7 +21,10 @@ import {
   NText,
   useMessage,
 } from 'naive-ui'
-import { BookOutline, CalculatorOutline } from '@vicons/ionicons5'
+import { BookOutline, CalculatorOutline, SearchOutline } from '@vicons/ionicons5'
+import { GetStockList, GetStockKLine } from '../../wailsjs/go/main/App'
+import { format } from 'date-fns'
+import KLineChart from './KLineChart.vue'
 
 const message = useMessage()
 
@@ -34,11 +40,19 @@ const topics = [
   { key: '风险管理', label: '风险管理', icon: BookOutline },
 ]
 
+// 股票选择相关状态
+const selectedStock = ref(null) // { code: '', name: '' }
+const stockSearchValue = ref('')
+const stockOptions = ref([])
+const stockKLineData = ref([]) // K线数据缓存
+const stockListCache = ref([]) // 股票列表缓存
+
 // 补仓计算器相关状态
 const costCalculator = reactive({
   // 初始持仓
   initialPrice: 10, // 初始买入价格
   initialVolume: 1000, // 初始买入数量
+  initialDate: null, // 初始买入日期
   // 补仓记录
   additions: [],
   // 当前价格
@@ -47,14 +61,26 @@ const costCalculator = reactive({
   nextId: 1
 })
 
+// 按日期排序的补仓记录
+const sortedAdditions = computed(() => {
+  return [...costCalculator.additions].sort((a, b) => {
+    if (!a.date && !b.date) return 0
+    if (!a.date) return 1
+    if (!b.date) return -1
+    return new Date(a.date) - new Date(b.date)
+  })
+})
+
 // 计算平均成本
 const averageCost = computed(() => {
   let totalCost = costCalculator.initialPrice * costCalculator.initialVolume
   let totalVolume = costCalculator.initialVolume
   
   costCalculator.additions.forEach(add => {
-    totalCost += add.price * add.volume
-    totalVolume += add.volume
+    if (add.price > 0 && add.volume > 0) {
+      totalCost += add.price * add.volume
+      totalVolume += add.volume
+    }
   })
   
   return totalVolume > 0 ? (totalCost / totalVolume).toFixed(2) : costCalculator.initialPrice.toFixed(2)
@@ -62,19 +88,37 @@ const averageCost = computed(() => {
 
 // 计算总持仓数量
 const totalVolume = computed(() => {
-  return costCalculator.initialVolume + costCalculator.additions.reduce((sum, add) => sum + add.volume, 0)
+  const validAdditions = costCalculator.additions.filter(add => add.price > 0 && add.volume > 0)
+  return costCalculator.initialVolume + validAdditions.reduce((sum, add) => sum + add.volume, 0)
 })
 
 // 计算总投入成本
 const totalCost = computed(() => {
   const initialCost = costCalculator.initialPrice * costCalculator.initialVolume
-  const additionsCost = costCalculator.additions.reduce((sum, add) => sum + add.price * add.volume, 0)
+  const validAdditions = costCalculator.additions.filter(add => add.price > 0 && add.volume > 0)
+  const additionsCost = validAdditions.reduce((sum, add) => sum + add.price * add.volume, 0)
   return (initialCost + additionsCost).toFixed(2)
+})
+
+// 获取最新价格（从K线数据或手动输入）
+const latestPrice = computed(() => {
+  if (selectedStock.value && stockKLineData.value && stockKLineData.value.length > 0) {
+    // 获取最新的收盘价
+    const sortedData = [...stockKLineData.value].sort((a, b) => {
+      const dateA = a.day || a.date || a.trade_date || ''
+      const dateB = b.day || b.date || b.trade_date || ''
+      return dateB.localeCompare(dateA)
+    })
+    if (sortedData.length > 0) {
+      return parseFloat(sortedData[0].close || sortedData[0].Close || costCalculator.currentPrice)
+    }
+  }
+  return costCalculator.currentPrice
 })
 
 // 计算当前市值
 const currentMarketValue = computed(() => {
-  return (totalVolume.value * costCalculator.currentPrice).toFixed(2)
+  return (totalVolume.value * latestPrice.value).toFixed(2)
 })
 
 // 计算盈亏
@@ -88,6 +132,228 @@ const profitLossPercent = computed(() => {
   return ((parseFloat(profitLoss.value) / parseFloat(totalCost.value)) * 100).toFixed(2)
 })
 
+// 初始化股票列表缓存
+async function initStockList() {
+  if (stockListCache.value.length === 0) {
+    try {
+      const result = await GetStockList('')
+      if (result && Array.isArray(result)) {
+        // 过滤掉指数，只保留个股
+        stockListCache.value = result.filter(item => !isIndex(item))
+      }
+    } catch (error) {
+      console.error('加载股票列表失败:', error)
+    }
+  }
+}
+
+// 判断是否为指数（通过代码格式和名称）
+function isIndex(item) {
+  if (!item) return false
+  
+  // 如果名称包含"指数"，肯定是指数
+  if (item.name && (item.name.includes('指数') || item.name.includes('Index'))) {
+    return true
+  }
+  
+  const tsCode = item.ts_code || ''
+  if (!tsCode) return false
+  
+  const code = tsCode.toLowerCase()
+  
+  // 指数代码模式：
+  // sh000xxx - 上证指数系列
+  // sz399xxx - 深证指数系列
+  // 个股代码模式：
+  // sh600xxx, sh601xxx, sh603xxx, sh605xxx - 上海主板
+  // sh688xxx - 科创板
+  // sz000xxx (但000001-000999可能是指数，需要特殊处理)
+  // sz002xxx - 中小板
+  // sz300xxx - 创业板
+  
+  // 明确是指数的模式
+  if (code.startsWith('sh000') || code.startsWith('sz399')) {
+    return true
+  }
+  
+  // 对于 sz000xxx，需要判断：
+  // 000001-000999 通常是指数（如000001是深证成指）
+  // 但有些个股也可能在这个范围内，不过大部分是指数
+  if (code.startsWith('sz000')) {
+    const numPart = parseInt(code.replace('sz000', ''))
+    // 000001-000999 通常是指数
+    if (numPart >= 1 && numPart <= 999) {
+      return true
+    }
+  }
+  
+  return false
+}
+
+// 股票搜索
+async function searchStock(keyword) {
+  if (!keyword || keyword.length < 1) {
+    stockOptions.value = []
+    return
+  }
+  
+  try {
+    // 先初始化股票列表
+    await initStockList()
+    
+    // 从缓存中搜索，过滤掉指数
+    const filtered = stockListCache.value.filter(item => {
+      // 过滤掉指数
+      if (isIndex(item)) {
+        return false
+      }
+      // 匹配名称或代码
+      return (item.name && item.name.includes(keyword)) || 
+             (item.ts_code && item.ts_code.includes(keyword.toUpperCase()))
+    })
+    
+    // 限制结果数量
+    const limitedResults = filtered.slice(0, 50)
+    
+    stockOptions.value = limitedResults.map(item => ({
+      label: `${item.name} - ${item.ts_code}`,
+      value: item.ts_code,
+      name: item.name,
+      code: item.ts_code
+    }))
+    
+    // 如果缓存中没有结果，尝试从API获取
+    if (stockOptions.value.length === 0 && keyword.length >= 2) {
+      const result = await GetStockList(keyword)
+      if (result && Array.isArray(result) && result.length > 0) {
+        // 过滤掉指数
+        const stockOnly = result.filter(item => !isIndex(item))
+        
+        stockOptions.value = stockOnly.slice(0, 50).map(item => ({
+          label: `${item.name} - ${item.ts_code}`,
+          value: item.ts_code,
+          name: item.name,
+          code: item.ts_code
+        }))
+        // 更新缓存（只缓存个股）
+        const newStocks = stockOnly.filter(item => 
+          !stockListCache.value.some(cached => cached.ts_code === item.ts_code)
+        )
+        stockListCache.value = [...stockListCache.value, ...newStocks]
+      }
+    }
+  } catch (error) {
+    console.error('搜索股票失败:', error)
+    message.error('搜索股票失败：' + (error.message || error))
+    stockOptions.value = []
+  }
+}
+
+// 选择股票
+async function onStockSelect(option) {
+  if (option && option.value) {
+    selectedStock.value = {
+      code: option.value,
+      name: option.name || option.label.split(' - ')[0]
+    }
+    stockSearchValue.value = `${option.name || option.label.split(' - ')[0]} - ${option.value}`
+    // 加载K线数据
+    await loadStockKLineData(option.value, option.name || option.label.split(' - ')[0])
+    message.success(`已选择股票：${option.name || option.label.split(' - ')[0]}`)
+  }
+}
+
+// 加载股票K线数据
+async function loadStockKLineData(code, name) {
+  try {
+    message.loading('正在加载历史K线数据...', { duration: 0 })
+    const result = await GetStockKLine(code, name, 365)
+    // GetStockKLine返回的可能是数组或对象
+    if (Array.isArray(result)) {
+      stockKLineData.value = result
+      message.destroyAll()
+      message.success(`历史数据加载成功，共 ${result.length} 条记录`)
+    } else if (result && result.data && Array.isArray(result.data)) {
+      stockKLineData.value = result.data
+      message.destroyAll()
+      message.success(`历史数据加载成功，共 ${result.data.length} 条记录`)
+    } else {
+      message.destroyAll()
+      message.warning('未获取到历史数据，请检查股票代码是否正确')
+      stockKLineData.value = []
+    }
+  } catch (error) {
+    message.destroyAll()
+    message.error('加载历史数据失败：' + (error.message || error))
+    stockKLineData.value = []
+  }
+}
+
+// 根据日期获取股票价格
+function getPriceByDate(date) {
+  if (!date || !stockKLineData.value || stockKLineData.value.length === 0) {
+    return null
+  }
+  
+  // 处理日期格式
+  let dateStr = ''
+  if (date instanceof Date) {
+    dateStr = format(date, 'yyyy-MM-dd')
+  } else if (typeof date === 'number') {
+    dateStr = format(new Date(date), 'yyyy-MM-dd')
+  } else if (typeof date === 'string') {
+    dateStr = date.substring(0, 10) // 取前10个字符 yyyy-MM-dd
+  }
+  
+  // K线数据格式可能是不同的，需要根据实际数据结构调整
+  const kline = stockKLineData.value.find(item => {
+    const itemDate = item.day || item.date || item.trade_date || ''
+    // 处理不同的日期格式
+    const normalizedItemDate = itemDate.toString().substring(0, 10)
+    return normalizedItemDate === dateStr
+  })
+  
+  if (kline) {
+    // 返回收盘价，尝试不同的字段名
+    const closePrice = kline.close || kline.Close || kline[2] || 0
+    const price = parseFloat(closePrice)
+    return price > 0 ? price : null
+  }
+  
+  // 如果找不到精确日期，找最近的交易日（小于等于目标日期）
+  const sortedData = [...stockKLineData.value].sort((a, b) => {
+    const dateA = (a.day || a.date || a.trade_date || '').toString().substring(0, 10)
+    const dateB = (b.day || b.date || b.trade_date || '').toString().substring(0, 10)
+    return dateB.localeCompare(dateA)
+  })
+  
+  for (const item of sortedData) {
+    const itemDate = (item.day || item.date || item.trade_date || '').toString().substring(0, 10)
+    if (itemDate && itemDate <= dateStr) {
+      const closePrice = item.close || item.Close || item[2] || 0
+      const price = parseFloat(closePrice)
+      if (price > 0) {
+        return price
+      }
+    }
+  }
+  
+  return null
+}
+
+// 更新初始买入价格（根据日期）
+async function updateInitialPriceByDate() {
+  if (costCalculator.initialDate && selectedStock.value) {
+    const price = getPriceByDate(costCalculator.initialDate)
+    if (price && price > 0) {
+      costCalculator.initialPrice = price
+      message.success(`已自动填充初始买入价格：${price.toFixed(2)} 元`)
+    } else {
+      message.warning('未找到该日期的价格数据，请手动输入价格')
+    }
+  }
+}
+
 // 添加补仓记录
 function addCostAddition() {
   if (costCalculator.additions.length === 0 || 
@@ -96,19 +362,23 @@ function addCostAddition() {
     costCalculator.additions.push({
       price: 0,
       volume: 0,
+      date: null,
       id: costCalculator.nextId++
     })
   }
-  // 自动聚焦到最后一个输入框
-  nextTick(() => {
-    const inputs = document.querySelectorAll('.cost-addition-input')
-    if (inputs.length > 0) {
-      const lastInput = inputs[inputs.length - 1]
-      if (lastInput && lastInput.focus) {
-        lastInput.focus()
-      }
+}
+
+// 更新补仓价格（根据日期）
+async function updateAdditionPriceByDate(addition) {
+  if (addition.date && selectedStock.value) {
+    const price = getPriceByDate(addition.date)
+    if (price && price > 0) {
+      addition.price = price
+      message.success(`已自动填充补仓价格：${price.toFixed(2)} 元`)
+    } else {
+      message.warning('未找到该日期的价格数据，请手动输入价格')
     }
-  })
+  }
 }
 
 // 删除补仓记录
@@ -199,13 +469,64 @@ function calculateTarget() {
           <!-- 补仓内容 -->
           <template v-if="activeTopic === '补仓'">
             <n-grid :cols="1" :x-gap="16" :y-gap="16">
+              <!-- 股票选择 -->
+              <n-gi>
+                <n-card title="选择股票" :bordered="true">
+                  <n-space vertical>
+                    <n-auto-complete
+                      v-model:value="stockSearchValue"
+                      :options="stockOptions"
+                      placeholder="输入股票名称或代码搜索"
+                      clearable
+                      @update-value="searchStock"
+                      @select="onStockSelect"
+                      style="width: 100%"
+                    >
+                      <template #prefix>
+                        <n-icon :component="SearchOutline" />
+                      </template>
+                    </n-auto-complete>
+                    <n-text v-if="selectedStock" type="success">
+                      已选择：{{ selectedStock.name }} ({{ selectedStock.code }})
+                    </n-text>
+                    <n-text v-else type="info" depth="3">
+                      请搜索并选择股票，将自动加载历史K线数据
+                    </n-text>
+                  </n-space>
+                </n-card>
+              </n-gi>
+              
+              <!-- K线图表 -->
+              <n-gi v-if="selectedStock">
+                <n-card title="日K线图" :bordered="true">
+                  <k-line-chart 
+                    :code="selectedStock.code" 
+                    :name="selectedStock.name" 
+                    :k-days="365"
+                    :chart-height="400"
+                    :dark-theme="false"
+                  />
+                </n-card>
+              </n-gi>
+              
               <!-- 补仓成本计算器 -->
               <n-gi>
                 <n-card title="补仓成本计算器" :bordered="true">
                   <n-space vertical size="large">
                     <!-- 初始持仓 -->
                     <n-card title="初始持仓" size="small" :bordered="true">
-                      <n-grid :cols="3" :x-gap="12">
+                      <n-grid :cols="4" :x-gap="12">
+                        <n-gi>
+                          <n-form-item label="买入日期">
+                            <n-date-picker
+                              v-model:value="costCalculator.initialDate"
+                              type="date"
+                              placeholder="选择买入日期"
+                              style="width: 100%"
+                              @update:value="updateInitialPriceByDate"
+                            />
+                          </n-form-item>
+                        </n-gi>
                         <n-gi>
                           <n-form-item label="买入价格（元）">
                             <n-input-number v-model:value="costCalculator.initialPrice" :min="0.01" :step="0.01" :precision="2" style="width: 100%"/>
@@ -233,8 +554,19 @@ function calculateTarget() {
                         <n-button size="small" type="error" @click="clearAllAdditions" :disabled="costCalculator.additions.length === 0" style="margin-left: 8px;">清空</n-button>
                       </template>
                       <n-space vertical v-if="costCalculator.additions.length > 0">
-                        <n-card v-for="(add, index) in costCalculator.additions" :key="add.id" size="small" :bordered="true" style="margin-bottom: 8px;">
-                          <n-grid :cols="4" :x-gap="12">
+                        <n-card v-for="(add, index) in sortedAdditions" :key="add.id" size="small" :bordered="true" style="margin-bottom: 8px;">
+                          <n-grid :cols="5" :x-gap="12">
+                            <n-gi>
+                              <n-form-item label="补仓日期">
+                                <n-date-picker
+                                  v-model:value="add.date"
+                                  type="date"
+                                  placeholder="选择补仓日期"
+                                  style="width: 100%"
+                                  @update:value="() => updateAdditionPriceByDate(add)"
+                                />
+                              </n-form-item>
+                            </n-gi>
                             <n-gi>
                               <n-form-item label="补仓价格（元）">
                                 <n-input-number 
@@ -273,9 +605,14 @@ function calculateTarget() {
                     
                     <!-- 当前价格 -->
                     <n-card title="当前价格" size="small" :bordered="true">
-                      <n-form-item label="当前股价（元）">
-                        <n-input-number v-model:value="costCalculator.currentPrice" :min="0.01" :step="0.01" :precision="2" style="width: 200px"/>
-                      </n-form-item>
+                      <n-space vertical>
+                        <n-form-item label="当前股价（元）">
+                          <n-input-number v-model:value="costCalculator.currentPrice" :min="0.01" :step="0.01" :precision="2" style="width: 200px"/>
+                        </n-form-item>
+                        <n-text v-if="selectedStock && stockKLineData.length > 0" type="info" depth="3">
+                          最新收盘价：{{ latestPrice.toFixed(2) }} 元
+                        </n-text>
+                      </n-space>
                     </n-card>
                     
                     <!-- 计算结果 -->
@@ -417,6 +754,127 @@ function calculateTarget() {
                         <br/>第二次补仓：8元买入1000股，成本8000元
                         <br/>平均成本 = (10000 + 9000 + 8000) / (1000 + 1000 + 1000) = 27000 / 3000 = 9元/股
                       </n-text>
+                    </n-card>
+                    
+                    <n-card title="实际补仓盈利案例" size="small" :bordered="true">
+                      <n-space vertical size="medium">
+                        <n-alert type="info" title="案例背景">
+                          假设您看好某只成长股，但买入后股价出现回调，通过合理的补仓策略最终实现盈利。
+                        </n-alert>
+                        
+                        <n-card title="📊 操作时间线" size="small" :bordered="true">
+                          <n-text>
+                            <strong>第1次买入（初始建仓）：</strong>
+                            <br/>时间：2024年1月15日
+                            <br/>价格：20.00元/股
+                            <br/>数量：1000股
+                            <br/>投入资金：20,000元
+                            <br/>持仓成本：20.00元/股
+                            <br/>
+                            <br/><strong>第2次补仓（股价回调）：</strong>
+                            <br/>时间：2024年2月10日（股价跌至18元）
+                            <br/>价格：18.00元/股
+                            <br/>数量：1000股
+                            <br/>投入资金：18,000元
+                            <br/>累计持仓：2000股
+                            <br/>平均成本：(20,000 + 18,000) / 2000 = <strong>19.00元/股</strong>
+                            <br/>
+                            <br/><strong>第3次补仓（继续下跌）：</strong>
+                            <br/>时间：2024年3月5日（股价跌至16元）
+                            <br/>价格：16.00元/股
+                            <br/>数量：1500股（采用金字塔补仓法，低位多买）
+                            <br/>投入资金：24,000元
+                            <br/>累计持仓：3500股
+                            <br/>平均成本：(20,000 + 18,000 + 24,000) / 3500 = <strong>17.71元/股</strong>
+                            <br/>
+                            <br/><strong>第4次补仓（底部区域）：</strong>
+                            <br/>时间：2024年3月25日（股价跌至14元）
+                            <br/>价格：14.00元/股
+                            <br/>数量：2000股（继续加仓）
+                            <br/>投入资金：28,000元
+                            <br/>累计持仓：5500股
+                            <br/>平均成本：(20,000 + 18,000 + 24,000 + 28,000) / 5500 = <strong>16.36元/股</strong>
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="💰 盈利情况分析" size="small" :bordered="true">
+                          <n-text>
+                            <strong>总投入成本：</strong>20,000 + 18,000 + 24,000 + 28,000 = <strong>90,000元</strong>
+                            <br/><strong>总持仓数量：</strong>5,500股
+                            <br/><strong>平均持仓成本：</strong>16.36元/股
+                            <br/>
+                            <br/><strong>假设股价回升至18.50元（接近初始买入价）：</strong>
+                            <br/>当前市值：5,500股 × 18.50元 = 101,750元
+                            <br/>盈利金额：101,750 - 90,000 = <strong style="color: #18a058;">+11,750元</strong>
+                            <br/>盈利率：(11,750 / 90,000) × 100% = <strong style="color: #18a058;">+13.06%</strong>
+                            <br/>
+                            <br/><strong>关键点分析：</strong>
+                            <br/>✓ 如果不补仓，在20元买入1000股，当股价回到18.50元时，仍亏损7.5%
+                            <br/>✓ 通过补仓，平均成本降至16.36元，股价回升至18.50元时盈利13.06%
+                            <br/>✓ 补仓策略成功将亏损转为盈利
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="📈 不同价格点的盈亏情况" size="small" :bordered="true">
+                          <n-text>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+                              <thead>
+                                <tr style="background-color: var(--n-color-hover);">
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: left;">股价</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">市值</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">盈亏</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">盈利率</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">14.00元（最低点）</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">77,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #d03050;">-13,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #d03050;">-14.44%</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">16.36元（成本价）</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">90,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">0元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">0%</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">18.00元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">99,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">+9,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">+10.00%</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">18.50元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">101,750元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">+11,750元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">+13.06%</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">20.00元（初始买入价）</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">110,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">+20,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">+22.22%</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="💡 案例启示" size="small" :bordered="true">
+                          <n-alert type="success" style="margin-bottom: 12px;">
+                            <ul>
+                              <li><strong>补仓时机很重要：</strong>在股价下跌过程中，分批补仓可以降低平均成本</li>
+                              <li><strong>金字塔补仓法有效：</strong>在低位买入更多，可以更有效地降低平均成本</li>
+                              <li><strong>需要足够的资金：</strong>补仓需要预留足够的资金，不能一次性用完</li>
+                              <li><strong>基本面要良好：</strong>补仓的前提是股票基本面没有恶化，只是短期回调</li>
+                              <li><strong>要有耐心：</strong>补仓后需要等待股价回升，可能需要较长时间</li>
+                              <li><strong>设置止损：</strong>如果股票基本面恶化，要及时止损，不要盲目补仓</li>
+                            </ul>
+                          </n-alert>
+                        </n-card>
+                      </n-space>
                     </n-card>
                   </n-space>
                 </n-card>
