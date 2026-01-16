@@ -79,7 +79,7 @@ import {
   WindowReload,
   WindowUnfullscreen
 } from '../../wailsjs/runtime'
-import {Add, ChatboxOutline, PulseOutline, GridOutline, ListOutline, SchoolOutline} from '@vicons/ionicons5'
+import {Add, ChatboxOutline, PulseOutline, GridOutline, ListOutline, SchoolOutline, TrashOutline} from '@vicons/ionicons5'
 import {MdEditor, MdPreview} from 'md-editor-v3';
 // preview.css相比style.css少了编辑器那部分样式
 //import 'md-editor-v3/lib/preview.css';
@@ -926,6 +926,62 @@ function removeMonitor(code, name, key) {
   })
 }
 
+// 一键清理所有自选股票
+function clearAllStocks() {
+  const stockCount = followList.value.length
+  if (stockCount === 0) {
+    message.warning('当前没有关注的股票')
+    return
+  }
+  
+  dialog.warning({
+    title: '确认清理',
+    content: `确定要取消关注所有 ${stockCount} 只股票吗？此操作不可恢复！`,
+    positiveText: '确定清理',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      message.loading('正在清理...', { duration: 0 })
+      
+      try {
+        // 先获取原始列表（未转换的代码）
+        const originalList = await GetFollowList(currentGroupId.value)
+        
+        // 获取所有股票代码，处理代码格式转换
+        const allStockCodes = originalList.map(stock => {
+          let code = stock.StockCode
+          // 如果代码是 gb_ 格式（数据库中的美股格式），需要转换为 us 格式
+          if (code.startsWith("gb_")) {
+            code = "us" + code.replace("gb_", "").toUpperCase()
+          }
+          return code
+        })
+        
+        // 批量取消关注
+        const promises = allStockCodes.map(code => UnFollow(code))
+        await Promise.all(promises)
+        
+        // 清空本地数据
+        stocks.value = []
+        results.value = {}
+        followList.value = []
+        
+        // 重新获取列表（虽然应该是空的）
+        await GetFollowList(currentGroupId.value).then(result => {
+          followList.value = result
+        })
+        
+        message.destroyAll()
+        message.success(`已成功清理 ${stockCount} 只股票`)
+        
+        // 停止监控
+        monitor()
+      } catch (error) {
+        message.destroyAll()
+        message.error('清理过程中出现错误：' + (error.message || error))
+      }
+    }
+  })
+}
 
 function SendDanmu() {
   //danmus.value.push(data.name)
@@ -3259,30 +3315,43 @@ function calculateTarget() {
       </n-gradient-text>
     </template>
   </vue-danmaku>
-  <!-- 显示模式切换按钮 -->
+  <!-- 显示模式切换按钮和清理按钮 -->
   <div style="position: fixed; top: 10px; right: 10px; z-index: 10; --wails-draggable:no-drag">
-    <n-button-group>
+    <n-space>
+      <n-button-group>
+        <n-button 
+          :type="displayMode === 'card' ? 'primary' : 'default'" 
+          @click="displayMode = 'card'"
+          size="small"
+        >
+          <template #icon>
+            <n-icon :component="GridOutline"/>
+          </template>
+          卡片
+        </n-button>
+        <n-button 
+          :type="displayMode === 'list' ? 'primary' : 'default'" 
+          @click="displayMode = 'list'"
+          size="small"
+        >
+          <template #icon>
+            <n-icon :component="ListOutline"/>
+          </template>
+          列表
+        </n-button>
+      </n-button-group>
       <n-button 
-        :type="displayMode === 'card' ? 'primary' : 'default'" 
-        @click="displayMode = 'card'"
+        type="error" 
         size="small"
+        @click="clearAllStocks"
+        :disabled="followList.length === 0"
       >
         <template #icon>
-          <n-icon :component="GridOutline"/>
+          <n-icon :component="TrashOutline"/>
         </template>
-        卡片
+        一键清理
       </n-button>
-      <n-button 
-        :type="displayMode === 'list' ? 'primary' : 'default'" 
-        @click="displayMode = 'list'"
-        size="small"
-      >
-        <template #icon>
-          <n-icon :component="ListOutline"/>
-        </template>
-        列表
-      </n-button>
-    </n-button-group>
+    </n-space>
   </div>
 
   <n-tabs type="card" style="--wails-draggable:no-drag" animated addable :data-currentGroupId="currentGroupId"
