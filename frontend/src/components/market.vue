@@ -14,12 +14,14 @@ import {
   ShareAnalysis,
   SummaryStockNews,
   GetAiConfigs,
+  GetLimitUpDownSectors,
+  GetAStockMarketTurnover,
 } from "../../wailsjs/go/main/App";
 import {EventsOff, EventsOn} from "../../wailsjs/runtime";
 import NewsList from "./newsList.vue";
 import KLineChart from "./KLineChart.vue";
 import { CaretDown, CaretUp, PulseOutline,} from "@vicons/ionicons5";
-import {NAvatar, NButton, NFlex, NText, useMessage, useNotification} from "naive-ui";
+import {NAvatar, NButton, NFlex, NText, NTag, NSpin, NTable, NEmpty, NCard, NSpace, NGrid, NGi, useMessage, useNotification} from "naive-ui";
 import {MdPreview} from "md-editor-v3";
 import {useRoute} from 'vue-router'
 import RankTable from "./rankTable.vue";
@@ -56,6 +58,11 @@ const summaryModal = ref(false)
 const summaryBTN = ref(true)
 const darkTheme = ref(false)
 const httpProxyEnabled = ref(false)
+// 市场快讯相关数据
+const marketTurnover = ref('') // A股成交额
+const limitUpSectors = ref([]) // 涨停板块
+const limitDownSectors = ref([]) // 跌停板块
+const limitDataLoading = ref(false)
 const theme = computed(() => {
   return darkTheme ? 'dark' : 'light'
 })
@@ -122,9 +129,15 @@ onBeforeMount(() => {
   })
   getIndex();
   industryRank();
+  loadMarketData(); // 加载市场快讯数据
   indexInterval.value = setInterval(() => {
     getIndex()
   }, 3000)
+  
+  // 定时刷新市场快讯数据（每30秒）
+  setInterval(() => {
+    loadMarketData()
+  }, 30000)
 
   indexIndustryRank.value = setInterval(() => {
     industryRank()
@@ -354,13 +367,173 @@ function ReFlesh(source) {
     }
   })
 }
+
+// 加载市场快讯数据（成交额、涨停跌停板块）
+async function loadMarketData() {
+  try {
+    limitDataLoading.value = true
+    
+    // 获取涨停跌停板块数据
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD格式
+    const limitData = await GetLimitUpDownSectors(today)
+    
+    if (limitData && !limitData.error) {
+      limitUpSectors.value = limitData.limitUpSectors || []
+      limitDownSectors.value = limitData.limitDownSectors || []
+      
+      // 按股票数量排序
+      limitUpSectors.value.sort((a, b) => b.stockCount - a.stockCount)
+      limitDownSectors.value.sort((a, b) => b.stockCount - a.stockCount)
+    }
+    
+    // 使用tushare获取A股总成交额
+    try {
+      const today = new Date().toISOString().split('T')[0].replace(/-/g, '') // YYYYMMDD格式
+      const turnover = await GetAStockMarketTurnover(today)
+      if (turnover && turnover > 0) {
+        marketTurnover.value = formatAmount(turnover)
+      } else {
+        // 如果tushare获取失败，尝试从全球指数中获取
+        const indexes = await GlobalStockIndexes()
+        if (indexes && indexes['common']) {
+          const commonIndexes = indexes['common']
+          for (const idx of commonIndexes) {
+            if (idx.code === 'sh000001' || idx.code === 'sz399001') {
+              if (idx.amount) {
+                marketTurnover.value = formatAmount(idx.amount)
+                break
+              }
+            }
+          }
+        }
+        if (!marketTurnover.value) {
+          marketTurnover.value = '计算中...'
+        }
+      }
+    } catch (error) {
+      console.error('获取A股成交额失败:', error)
+      marketTurnover.value = '获取失败'
+    }
+  } catch (error) {
+    console.error('加载市场数据失败:', error)
+    message.error('加载市场数据失败')
+  } finally {
+    limitDataLoading.value = false
+  }
+}
+
+// 格式化金额
+function formatAmount(amount) {
+  if (!amount) return '0'
+  const num = parseFloat(amount)
+  if (num >= 100000000) {
+    return (num / 100000000).toFixed(2) + '亿'
+  } else if (num >= 10000) {
+    return (num / 10000).toFixed(2) + '万'
+  }
+  return num.toFixed(2)
+}
 </script>
 
 <template>
   <n-card>
     <n-tabs type="line" animated @update-value="updateTab" :value="nowTab" style="--wails-draggable:no-drag">
       <n-tab-pane name="市场快讯" tab="市场快讯">
-        <n-grid :cols="1" :y-gap="0">
+        <n-grid :cols="1" :y-gap="16">
+          <!-- A股成交额 -->
+          <n-gi>
+            <n-card :bordered="true">
+              <n-space align="center" justify="space-between">
+                <n-text strong style="font-size: 16px;">今日A股成交额：</n-text>
+                <n-text type="primary" strong style="font-size: 20px;">{{ marketTurnover || '加载中...' }}</n-text>
+              </n-space>
+            </n-card>
+          </n-gi>
+          
+          <!-- 涨停跌停板块统计 -->
+          <n-gi>
+            <n-grid :cols="2" :x-gap="16">
+              <!-- 涨停板块 -->
+              <n-gi>
+                <n-card title="涨停板块统计" :bordered="true">
+                  <n-spin :show="limitDataLoading">
+                    <n-space vertical v-if="limitUpSectors.length > 0">
+                      <n-table :bordered="true" :single-line="false" size="small">
+                        <thead>
+                          <tr>
+                            <th style="text-align: left; width: 40%;">板块名称</th>
+                            <th style="text-align: center; width: 20%;">数量</th>
+                            <th style="text-align: left; width: 40%;">股票列表</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(sector, index) in limitUpSectors.slice(0, 10)" :key="index">
+                            <td style="text-align: left;">
+                              <n-text strong>{{ sector.sectorName }}</n-text>
+                            </td>
+                            <td style="text-align: center;">
+                              <n-tag type="error" size="small">{{ sector.stockCount }}</n-tag>
+                            </td>
+                            <td style="text-align: left;">
+                              <n-text depth="3" style="font-size: 12px;">
+                                {{ sector.stocks.slice(0, 3).join('、') }}
+                                <span v-if="sector.stocks.length > 3">等{{ sector.stocks.length }}只</span>
+                              </n-text>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </n-table>
+                      <n-text v-if="limitUpSectors.length > 10" depth="3" style="font-size: 12px;">
+                        共{{ limitUpSectors.length }}个板块，仅显示前10个
+                      </n-text>
+                    </n-space>
+                    <n-empty v-else description="暂无涨停板块数据" size="small"/>
+                  </n-spin>
+                </n-card>
+              </n-gi>
+              
+              <!-- 跌停板块 -->
+              <n-gi>
+                <n-card title="跌停板块统计" :bordered="true">
+                  <n-spin :show="limitDataLoading">
+                    <n-space vertical v-if="limitDownSectors.length > 0">
+                      <n-table :bordered="true" :single-line="false" size="small">
+                        <thead>
+                          <tr>
+                            <th style="text-align: left; width: 40%;">板块名称</th>
+                            <th style="text-align: center; width: 20%;">数量</th>
+                            <th style="text-align: left; width: 40%;">股票列表</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(sector, index) in limitDownSectors.slice(0, 10)" :key="index">
+                            <td style="text-align: left;">
+                              <n-text strong>{{ sector.sectorName }}</n-text>
+                            </td>
+                            <td style="text-align: center;">
+                              <n-tag type="success" size="small">{{ sector.stockCount }}</n-tag>
+                            </td>
+                            <td style="text-align: left;">
+                              <n-text depth="3" style="font-size: 12px;">
+                                {{ sector.stocks.slice(0, 3).join('、') }}
+                                <span v-if="sector.stocks.length > 3">等{{ sector.stocks.length }}只</span>
+                              </n-text>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </n-table>
+                      <n-text v-if="limitDownSectors.length > 10" depth="3" style="font-size: 12px;">
+                        共{{ limitDownSectors.length }}个板块，仅显示前10个
+                      </n-text>
+                    </n-space>
+                    <n-empty v-else description="暂无跌停板块数据" size="small"/>
+                  </n-spin>
+                </n-card>
+              </n-gi>
+            </n-grid>
+          </n-gi>
+          
+          <!-- 热词分析 -->
           <n-gi>
             <AnalyzeMartket :dark-theme="darkTheme" :chart-height="600" :kDays="1" :name="'最近24小时热词'" />
           </n-gi>

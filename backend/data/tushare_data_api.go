@@ -91,3 +91,60 @@ func getStockType(code string) string {
 	}
 	return ""
 }
+
+// GetAStockMarketTurnover 获取A股市场总成交额（通过上证指数和深证成指的成交额相加）
+func (receiver TushareApi) GetAStockMarketTurnover(tradeDate string, crawlTimeOut int64) float64 {
+	if tradeDate == "" {
+		tradeDate = time.Now().Format("20060102")
+	}
+	
+	// 获取上证指数和深证成指的成交额
+	shAmount := receiver.getIndexDailyAmount("000001.SH", tradeDate, crawlTimeOut)
+	szAmount := receiver.getIndexDailyAmount("399001.SZ", tradeDate, crawlTimeOut)
+	
+	totalAmount := shAmount + szAmount
+	logger.SugaredLogger.Infof("A股总成交额: 上证指数成交额=%.2f, 深证成指成交额=%.2f, 总计=%.2f", shAmount, szAmount, totalAmount)
+	
+	return totalAmount
+}
+
+// getIndexDailyAmount 获取指数的日线成交额
+func (receiver TushareApi) getIndexDailyAmount(indexCode, tradeDate string, crawlTimeOut int64) float64 {
+	fields := "ts_code,trade_date,close,pct_chg,open,high,low,pre_close,change,vol,amount"
+	resp := &TushareStockBasicResponse{}
+	
+	_, err := receiver.client.SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
+		SetHeader("content-type", "application/json").
+		SetBody(&TushareRequest{
+			ApiName: "index_daily",
+			Token:   receiver.config.TushareToken,
+			Params: map[string]any{
+				"ts_code":    indexCode,
+				"trade_date": tradeDate,
+			},
+			Fields: fields}).
+		SetResult(resp).
+		Post(tushareApiUrl)
+	
+	if err != nil {
+		logger.SugaredLogger.Errorf("获取指数成交额失败 %s: %s", indexCode, err.Error())
+		return 0
+	}
+	
+	if resp.Code != 0 {
+		logger.SugaredLogger.Errorf("Tushare API返回错误 %s: %s", indexCode, resp.Msg)
+		return 0
+	}
+	
+	// 解析数据，amount字段在索引10
+	if resp.Data.Items != nil && len(resp.Data.Items) > 0 {
+		for _, item := range resp.Data.Items {
+			if len(item) > 10 {
+				amount, _ := convertor.ToFloat(item[10]) // amount字段
+				return amount
+			}
+		}
+	}
+	
+	return 0
+}

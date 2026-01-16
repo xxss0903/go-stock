@@ -74,6 +74,10 @@ export function GetAIResponseResult(arg1) {
   return window['go']['main']['App']['GetAIResponseResult'](arg1);
 }
 
+export function GetAStockMarketTurnover(arg1) {
+  return window['go']['main']['App']['GetAStockMarketTurnover'](arg1);
+}
+
 export function GetAiConfigs() {
   return window['go']['main']['App']['GetAiConfigs']();
 }

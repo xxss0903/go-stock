@@ -1401,6 +1401,13 @@ func (a *App) GetLimitUpDownSectors(tradeDate string) map[string]any {
 	}
 }
 
+// GetAStockMarketTurnover 获取A股市场总成交额
+func (a *App) GetAStockMarketTurnover(tradeDate string) float64 {
+	config := data.GetSettingConfig()
+	tushareApi := data.NewTushareApi(config)
+	return tushareApi.GetAStockMarketTurnover(tradeDate, int64(config.CrawlTimeOut))
+}
+
 // CreateTradingRecord 创建复盘记录
 func (a *App) CreateTradingRecord(record models.TradingRecord) string {
 	err := data.NewTradingRecordApi().CreateTradingRecord(&record)

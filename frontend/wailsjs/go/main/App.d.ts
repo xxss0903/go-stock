@@ -40,6 +40,8 @@ export function Follow(arg1:string):Promise<string>;
 
 export function GetAIResponseResult(arg1:string):Promise<models.AIResponseResult>;
 
+export function GetAStockMarketTurnover(arg1:string):Promise<number>;
+
 export function GetAiConfigs():Promise<Array<data.AIConfig>>;
 
 export function GetConfig():Promise<data.SettingConfig>;
