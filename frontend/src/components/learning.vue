@@ -21,7 +21,7 @@ import {
   NText,
   useMessage,
 } from 'naive-ui'
-import { BookOutline, CalculatorOutline, SearchOutline, CashOutline } from '@vicons/ionicons5'
+import { BookOutline, CalculatorOutline, SearchOutline, CashOutline, TrendingDownOutline } from '@vicons/ionicons5'
 import { GetStockList, GetStockKLine } from '../../wailsjs/go/main/App'
 import { format } from 'date-fns'
 import KLineChart from './KLineChart.vue'
@@ -35,6 +35,7 @@ const activeTopic = ref('补仓')
 const topics = [
   { key: '补仓', label: '补仓策略', icon: CalculatorOutline },
   { key: '分红', label: '分红策略', icon: CashOutline },
+  { key: '低价股', label: '低价股发掘', icon: TrendingDownOutline },
   { key: 'K线', label: 'K线基础', icon: BookOutline },
   { key: '技术指标', label: '技术指标', icon: BookOutline },
   { key: '基本面', label: '基本面分析', icon: BookOutline },
@@ -1154,6 +1155,351 @@ function calculateTarget() {
                               <li><strong>股价可能长期不涨：</strong>高分红股票可能长期横盘，主要依靠分红收益</li>
                               <li><strong>分红可能减少：</strong>公司经营困难时可能减少或停止分红</li>
                               <li><strong>需要缴税：</strong>分红收益需要缴纳个人所得税（持股1年以上免税）</li>
+                            </ul>
+                          </n-alert>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                  </n-space>
+                </n-card>
+              </n-gi>
+            </n-grid>
+          </template>
+
+          <!-- 低价股发掘内容 -->
+          <template v-else-if="activeTopic === '低价股'">
+            <n-grid :cols="1" :x-gap="16" :y-gap="16">
+              <n-gi>
+                <n-card title="低价股发掘策略" :bordered="true">
+                  <n-space vertical size="large">
+                    <n-card title="什么是低价股？" size="small" :bordered="true">
+                      <n-text>
+                        低价股通常指股价相对较低、市值较小的股票。但低价不等于低质，很多低价股可能是被市场低估的优质公司。通过深入分析公司基本面、盈利能力和经营状况，可以发掘出具有投资价值的低价股。
+                      </n-text>
+                    </n-card>
+                    
+                    <n-card title="低价股的特点" size="small" :bordered="true">
+                      <n-space vertical>
+                        <n-card title="1. 价格优势" size="small" :bordered="true">
+                          <n-text>
+                            <strong>特点：</strong>
+                            <br/>• 股价通常在10元以下，甚至5元以下
+                            <br/>• 市值相对较小，容易被资金推动
+                            <br/>• 上涨空间较大，翻倍相对容易
+                            <br/>• 适合资金量较小的投资者
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="2. 波动性大" size="small" :bordered="true">
+                          <n-text>
+                            <strong>特点：</strong>
+                            <br/>• 价格波动幅度较大，适合波段操作
+                            <br/>• 涨跌速度快，需要及时止盈止损
+                            <br/>• 风险相对较高，需要严格的风险控制
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="3. 潜力股特征" size="small" :bordered="true">
+                          <n-text>
+                            <strong>特点：</strong>
+                            <br/>• 公司基本面良好，盈利稳定或改善
+                            <br/>• 行业前景看好，有成长空间
+                            <br/>• 被市场低估，价值有待发现
+                          </n-text>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                    
+                    <n-card title="如何发掘低价股？" size="small" :bordered="true">
+                      <n-space vertical>
+                        <n-card title="1. 财务指标筛选" size="small" :bordered="true">
+                          <n-text>
+                            <strong>关键指标：</strong>
+                            <br/>• <strong>PE（市盈率）：</strong>低于行业平均，通常PE < 20为佳
+                            <br/>• <strong>PB（市净率）：</strong>低于1.5，说明股价可能被低估
+                            <br/>• <strong>ROE（净资产收益率）：</strong>连续3年 > 10%，说明盈利能力稳定
+                            <br/>• <strong>负债率：</strong>低于60%，财务风险可控
+                            <br/>• <strong>现金流：</strong>经营活动现金流为正，公司运营健康
+                            <br/>
+                            <br/><strong>筛选公式示例：</strong>
+                            <br/>PE < 20 AND PB < 1.5 AND ROE > 10% AND 负债率 < 60%
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="2. 盈利报告分析" size="small" :bordered="true">
+                          <n-text>
+                            <strong>重点关注：</strong>
+                            <br/>• <strong>营收增长：</strong>连续3个季度营收同比增长 > 10%
+                            <br/>• <strong>净利润增长：</strong>连续3个季度净利润同比增长 > 15%
+                            <br/>• <strong>毛利率：</strong>毛利率稳定或提升，说明产品竞争力强
+                            <br/>• <strong>净利率：</strong>净利率 > 5%，盈利能力良好
+                            <br/>• <strong>每股收益（EPS）：</strong>EPS持续增长，公司价值提升
+                            <br/>
+                            <br/><strong>分析要点：</strong>
+                            <br/>✓ 对比同行业公司，找出被低估的标的
+                            <br/>✓ 关注业绩拐点，业绩改善的低价股更有潜力
+                            <br/>✓ 分析业绩增长的原因，判断可持续性
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="3. 行业和公司分析" size="small" :bordered="true">
+                          <n-text>
+                            <strong>行业分析：</strong>
+                            <br/>• 选择处于成长期或复苏期的行业
+                            <br/>• 避开夕阳行业和周期性下行行业
+                            <br/>• 关注政策支持的行业（如新能源、科技等）
+                            <br/>
+                            <br/><strong>公司分析：</strong>
+                            <br/>• 公司在行业中的地位和竞争优势
+                            <br/>• 管理层能力和公司治理水平
+                            <br/>• 是否有重大利好消息或题材
+                            <br/>• 是否有重组、并购等资本运作
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="4. 技术面分析" size="small" :bordered="true">
+                          <n-text>
+                            <strong>技术指标：</strong>
+                            <br/>• <strong>K线形态：</strong>底部形态（如双底、头肩底）更佳
+                            <br/>• <strong>均线系统：</strong>股价站上5日、10日均线，趋势转好
+                            <br/>• <strong>成交量：</strong>成交量放大，资金关注度提升
+                            <br/>• <strong>MACD：</strong>MACD金叉，买入信号
+                            <br/>• <strong>RSI：</strong>RSI在30-70之间，不过度超买超卖
+                          </n-text>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                    
+                    <n-card title="波段操作策略" size="small" :bordered="true">
+                      <n-space vertical>
+                        <n-card title="1. 买入时机" size="small" :bordered="true">
+                          <n-text>
+                            <strong>最佳买入点：</strong>
+                            <br/>• 股价处于相对低位，技术指标显示超卖
+                            <br/>• 公司发布业绩改善公告，基本面转好
+                            <br/>• 行业出现利好消息，板块轮动
+                            <br/>• 成交量放大，资金开始关注
+                            <br/>• 突破重要阻力位，趋势确立
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="2. 持仓策略" size="small" :bordered="true">
+                          <n-text>
+                            <strong>持仓周期：</strong>
+                            <br/>• 短期波段：1-2周，适合技术面操作
+                            <br/>• 中期波段：1-3个月，适合基本面改善
+                            <br/>• 长期持有：3-6个月，适合价值发现
+                            <br/>
+                            <br/><strong>仓位管理：</strong>
+                            <br/>• 单只股票不超过总资金的20%
+                            <br/>• 低价股组合3-5只，分散风险
+                            <br/>• 分批建仓，降低买入成本
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="3. 止盈止损" size="small" :bordered="true">
+                          <n-text>
+                            <strong>止盈策略：</strong>
+                            <br/>• 目标收益：15%-30%（根据市场情况调整）
+                            <br/>• 分批止盈：达到目标后先卖出一半，剩余看趋势
+                            <br/>• 技术止盈：跌破5日均线或MACD死叉
+                            <br/>
+                            <br/><strong>止损策略：</strong>
+                            <br/>• 固定止损：亏损超过10%坚决止损
+                            <br/>• 技术止损：跌破重要支撑位
+                            <br/>• 基本面止损：公司基本面恶化
+                          </n-text>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                    
+                    <n-card title="实际案例：发掘低价股并波段盈利" size="small" :bordered="true">
+                      <n-space vertical size="medium">
+                        <n-alert type="info" title="案例背景">
+                          假设通过财务指标和盈利报告分析，发现一只被低估的低价股，通过波段操作实现盈利。
+                        </n-alert>
+                        
+                        <n-card title="📊 股票筛选过程" size="small" :bordered="true">
+                          <n-text>
+                            <strong>筛选条件：</strong>
+                            <br/>• 股价：5-10元区间
+                            <br/>• PE：< 20
+                            <br/>• PB：< 1.5
+                            <br/>• ROE：> 10%
+                            <br/>• 负债率：< 60%
+                            <br/>
+                            <br/><strong>盈利报告分析：</strong>
+                            <br/>• Q1营收同比增长15%，净利润增长20%
+                            <br/>• Q2营收同比增长18%，净利润增长25%
+                            <br/>• Q3营收同比增长22%，净利润增长30%
+                            <br/>• 毛利率从25%提升至28%
+                            <br/>• EPS连续3个季度增长
+                            <br/>
+                            <br/><strong>行业分析：</strong>
+                            <br/>• 所属行业：新能源产业链
+                            <br/>• 行业处于成长期，政策支持
+                            <br/>• 公司在细分领域有竞争优势
+                            <br/>
+                            <br/><strong>技术面分析：</strong>
+                            <br/>• 股价从12元跌至6.5元，跌幅45%
+                            <br/>• 形成双底形态，底部确认
+                            <br/>• MACD金叉，成交量放大
+                            <br/>• 突破10日均线，趋势转好
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="💰 波段操作过程" size="small" :bordered="true">
+                          <n-text>
+                            <strong>第1次买入（建仓）：</strong>
+                            <br/>时间：2024年3月15日
+                            <br/>价格：6.50元/股
+                            <br/>数量：5,000股
+                            <br/>投入资金：32,500元
+                            <br/>理由：技术面底部确认，基本面改善
+                            <br/>
+                            <br/><strong>第2次买入（加仓）：</strong>
+                            <br/>时间：2024年4月10日（Q1业绩超预期）
+                            <br/>价格：7.20元/股
+                            <br/>数量：3,000股
+                            <br/>投入资金：21,600元
+                            <br/>理由：业绩超预期，市场关注度提升
+                            <br/>
+                            <br/><strong>第1次卖出（部分止盈）：</strong>
+                            <br/>时间：2024年5月20日
+                            <br/>价格：8.50元/股
+                            <br/>数量：4,000股
+                            <br/>收益：8,000股 × 8.50元 - (5,000股 × 6.50元 + 3,000股 × 7.20元) = 68,000 - 54,100 = 13,900元
+                            <br/>理由：达到目标收益（30%），分批止盈
+                            <br/>
+                            <br/><strong>第2次卖出（全部清仓）：</strong>
+                            <br/>时间：2024年6月25日
+                            <br/>价格：9.20元/股
+                            <br/>数量：4,000股（剩余持仓）
+                            <br/>收益：4,000股 × 9.20元 - 4,000股 × 7.20元 = 8,000元
+                            <br/>理由：MACD死叉，技术面转弱
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="📈 盈利分析" size="small" :bordered="true">
+                          <n-text>
+                            <strong>总投入成本：</strong>
+                            <br/>32,500 + 21,600 = 54,100元
+                            <br/>
+                            <br/><strong>总收益：</strong>
+                            <br/>第1次卖出：4,000股 × 8.50元 = 34,000元
+                            <br/>第2次卖出：4,000股 × 9.20元 = 36,800元
+                            <br/>总回收：34,000 + 36,800 = 70,800元
+                            <br/>
+                            <br/><strong>净利润：</strong>
+                            <br/>70,800 - 54,100 = 16,700元
+                            <br/>
+                            <br/><strong>收益率：</strong>
+                            <br/>(16,700 / 54,100) × 100% = <strong style="color: #18a058;">30.87%</strong>
+                            <br/>
+                            <br/><strong>操作周期：</strong>
+                            <br/>3月15日 - 6月25日，共102天（约3.4个月）
+                            <br/>
+                            <br/><strong>年化收益率：</strong>
+                            <br/>约 <strong style="color: #18a058;">330%</strong>（按3.4个月计算）
+                            <br/>
+                            <br/><strong>关键成功因素：</strong>
+                            <br/>✓ 通过财务指标筛选出优质低价股
+                            <br/>✓ 深入分析盈利报告，发现业绩改善趋势
+                            <br/>✓ 技术面确认买入时机
+                            <br/>✓ 严格执行止盈止损策略
+                            <br/>✓ 分批建仓和分批止盈，降低风险
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="📋 操作要点总结" size="small" :bordered="true">
+                          <n-text>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+                              <thead>
+                                <tr style="background-color: var(--n-color-hover);">
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: left;">阶段</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: left;">操作</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: left;">关键指标</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">筛选阶段</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">财务指标筛选 + 盈利报告分析</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">PE < 20, PB < 1.5, ROE > 10%, 营收/净利润增长</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">买入阶段</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">分批建仓，技术面确认</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">底部形态、MACD金叉、成交量放大</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">持仓阶段</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">持续跟踪业绩，关注技术面</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">季度业绩、均线系统、MACD</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">止盈阶段</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">分批止盈，技术面转弱时清仓</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">目标收益30%、MACD死叉</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="💡 低价股发掘的关键要点" size="small" :bordered="true">
+                          <n-space vertical>
+                            <n-card title="1. 基本面是基础" size="small" :bordered="true">
+                              <n-text>
+                                <strong>重要性：</strong>
+                                <br/>• 低价不等于低质，必须选择基本面良好的公司
+                                <br/>• 通过财务指标和盈利报告深入分析
+                                <br/>• 对比同行业公司，找出被低估的标的
+                                <br/>• 关注业绩改善趋势，而非只看当前业绩
+                              </n-text>
+                            </n-card>
+                            
+                            <n-card title="2. 技术面确认时机" size="small" :bordered="true">
+                              <n-text>
+                                <strong>重要性：</strong>
+                                <br/>• 基本面好但技术面不好，可能还要等待
+                                <br/>• 技术面确认后再买入，提高成功率
+                                <br/>• 结合K线形态、均线、成交量等指标
+                                <br/>• 不要追高，等待回调买入
+                              </n-text>
+                            </n-card>
+                            
+                            <n-card title="3. 严格风险控制" size="small" :bordered="true">
+                              <n-text>
+                                <strong>重要性：</strong>
+                                <br/>• 低价股波动大，必须设置止损
+                                <br/>• 单只股票不超过总资金20%
+                                <br/>• 分散投资，不要集中在一只股票
+                                <br/>• 严格执行止盈止损策略
+                              </n-text>
+                            </n-card>
+                            
+                            <n-card title="4. 持续跟踪" size="small" :bordered="true">
+                              <n-text>
+                                <strong>重要性：</strong>
+                                <br/>• 定期查看公司公告和业绩报告
+                                <br/>• 关注行业动态和政策变化
+                                <br/>• 技术面转弱及时止盈
+                                <br/>• 基本面恶化及时止损
+                              </n-text>
+                            </n-card>
+                          </n-space>
+                        </n-card>
+                        
+                        <n-card title="⚠️ 低价股投资的风险" size="small" :bordered="true">
+                          <n-alert type="warning" style="margin-bottom: 12px;">
+                            <ul>
+                              <li><strong>波动性大：</strong>低价股价格波动幅度大，可能快速上涨也可能快速下跌</li>
+                              <li><strong>流动性风险：</strong>部分低价股成交量小，买卖可能不够顺畅</li>
+                              <li><strong>基本面风险：</strong>低价股中可能存在业绩差、经营困难的公司</li>
+                              <li><strong>退市风险：</strong>连续亏损的低价股可能面临退市风险</li>
+                              <li><strong>市场风险：</strong>整体市场下跌时，低价股可能跌幅更大</li>
+                              <li><strong>需要专业知识：</strong>发掘低价股需要较强的财务分析能力</li>
                             </ul>
                           </n-alert>
                         </n-card>
