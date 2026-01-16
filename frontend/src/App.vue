@@ -28,6 +28,7 @@ import {
   StarOutline,
   Wallet, WarningOutline,
   DocumentTextOutline,
+  BookOutline,
 } from '@vicons/ionicons5'
 import {AnalyzeSentiment, GetConfig, GetGroupList,GetVersionInfo} from "../wailsjs/go/main/App";
 import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
@@ -415,6 +416,26 @@ const menuOptions = ref([
         ),
     key: 'trading-record',
     icon: renderIcon(DocumentTextOutline),
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'learning',
+                query: {
+                  name:"学习",
+                },
+                onClick: () => {
+                  activeKey.value = 'learning'
+                },
+              }
+            },
+            {default: () => '学习'}
+        ),
+    key: 'learning',
+    icon: renderIcon(BookOutline),
   },
   {
     label: () =>

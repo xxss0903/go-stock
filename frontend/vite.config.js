@@ -18,5 +18,11 @@ export default defineConfig({
               library: 'chat'
           })],
       }),
-  ]
+  ],
+  server: {
+    host: 'localhost',
+    port: 5173,
+    strictPort: true,
+    open: false,
+  }
 })
