@@ -21,7 +21,7 @@ import {
   NText,
   useMessage,
 } from 'naive-ui'
-import { BookOutline, CalculatorOutline, SearchOutline } from '@vicons/ionicons5'
+import { BookOutline, CalculatorOutline, SearchOutline, CashOutline } from '@vicons/ionicons5'
 import { GetStockList, GetStockKLine } from '../../wailsjs/go/main/App'
 import { format } from 'date-fns'
 import KLineChart from './KLineChart.vue'
@@ -34,6 +34,7 @@ const activeTopic = ref('补仓')
 // 学习主题列表
 const topics = [
   { key: '补仓', label: '补仓策略', icon: CalculatorOutline },
+  { key: '分红', label: '分红策略', icon: CashOutline },
   { key: 'K线', label: 'K线基础', icon: BookOutline },
   { key: '技术指标', label: '技术指标', icon: BookOutline },
   { key: '基本面', label: '基本面分析', icon: BookOutline },
@@ -871,6 +872,288 @@ function calculateTarget() {
                               <li><strong>基本面要良好：</strong>补仓的前提是股票基本面没有恶化，只是短期回调</li>
                               <li><strong>要有耐心：</strong>补仓后需要等待股价回升，可能需要较长时间</li>
                               <li><strong>设置止损：</strong>如果股票基本面恶化，要及时止损，不要盲目补仓</li>
+                            </ul>
+                          </n-alert>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                  </n-space>
+                </n-card>
+              </n-gi>
+            </n-grid>
+          </template>
+
+          <!-- 分红策略内容 -->
+          <template v-else-if="activeTopic === '分红'">
+            <n-grid :cols="1" :x-gap="16" :y-gap="16">
+              <n-gi>
+                <n-card title="分红策略" :bordered="true">
+                  <n-space vertical size="large">
+                    <n-card title="什么是分红策略？" size="small" :bordered="true">
+                      <n-text>
+                        分红策略是指通过购买高分红股票（如银行股、公用事业股等），长期持有并不断买入，通过每年获得的分红收益来实现长期盈利的投资策略。这是一种相对稳健的长期投资方式。
+                      </n-text>
+                    </n-card>
+                    
+                    <n-card title="分红股票的特点" size="small" :bordered="true">
+                      <n-space vertical>
+                        <n-card title="1. 银行股" size="small" :bordered="true">
+                          <n-text>
+                            <strong>特点：</strong>
+                            <br/>• 分红率通常较高（3%-6%）
+                            <br/>• 盈利稳定，现金流充足
+                            <br/>• 股价波动相对较小
+                            <br/>• 适合长期持有
+                            <br/>
+                            <br/><strong>代表股票：</strong>工商银行、建设银行、农业银行、中国银行等
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="2. 公用事业股" size="small" :bordered="true">
+                          <n-text>
+                            <strong>特点：</strong>
+                            <br/>• 业务稳定，需求刚性
+                            <br/>• 分红率较高且稳定
+                            <br/>• 受经济周期影响较小
+                            <br/>
+                            <br/><strong>代表股票：</strong>电力、水务、燃气等公用事业公司
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="3. 高分红蓝筹股" size="small" :bordered="true">
+                          <n-text>
+                            <strong>特点：</strong>
+                            <br/>• 行业龙头，盈利能力强
+                            <br/>• 分红政策稳定
+                            <br/>• 适合价值投资者
+                            <br/>
+                            <br/><strong>代表股票：</strong>大型央企、国企等
+                          </n-text>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                    
+                    <n-card title="分红策略的盈利方式" size="small" :bordered="true">
+                      <n-space vertical>
+                        <n-card title="1. 分红收益" size="small" :bordered="true">
+                          <n-text>
+                            <strong>直接收益：</strong>
+                            <br/>• 每年获得现金分红
+                            <br/>• 分红率 = 每股分红 / 股价 × 100%
+                            <br/>• 例如：股价10元，每股分红0.5元，分红率 = 5%
+                            <br/>
+                            <br/><strong>复利效应：</strong>
+                            <br/>• 将分红再投资买入更多股票
+                            <br/>• 下一年获得更多分红
+                            <br/>• 长期复利增长效果显著
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="2. 股价上涨收益" size="small" :bordered="true">
+                          <n-text>
+                            <strong>长期价值回归：</strong>
+                            <br/>• 高分红股票通常估值较低
+                            <br/>• 随着业绩增长，股价可能上涨
+                            <br/>• 获得"分红+价差"双重收益
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="3. 成本摊薄" size="small" :bordered="true">
+                          <n-text>
+                            <strong>持续买入策略：</strong>
+                            <br/>• 定期买入，降低平均成本
+                            <br/>• 分红再投资，增加持股数量
+                            <br/>• 长期持有，享受复利增长
+                          </n-text>
+                        </n-card>
+                      </n-space>
+                    </n-card>
+                    
+                    <n-card title="实际分红盈利案例（银行股）" size="small" :bordered="true">
+                      <n-space vertical size="medium">
+                        <n-alert type="info" title="案例背景">
+                          假设您选择某大型银行股进行长期分红投资，通过持续买入和分红再投资，实现长期稳定盈利。
+                        </n-alert>
+                        
+                        <n-card title="📊 投资时间线（5年计划）" size="small" :bordered="true">
+                          <n-text>
+                            <strong>初始投资：</strong>
+                            <br/>时间：2024年1月
+                            <br/>股票：某大型银行股
+                            <br/>买入价格：5.00元/股
+                            <br/>买入数量：10,000股
+                            <br/>投入资金：50,000元
+                            <br/>
+                            <br/><strong>第1年（2024年）：</strong>
+                            <br/>• 年中分红：每股0.25元，共2,500元
+                            <br/>• 分红再投资：2,500元 ÷ 5.20元 = 480股（假设股价5.20元）
+                            <br/>• 累计持股：10,480股
+                            <br/>• 累计投入：50,000元
+                            <br/>
+                            <br/><strong>第2年（2025年）：</strong>
+                            <br/>• 年中分红：每股0.26元，共2,725元（10,480股 × 0.26元）
+                            <br/>• 额外买入：每月定投2,000元，全年24,000元
+                            <br/>• 分红再投资：2,725元 ÷ 5.30元 = 514股
+                            <br/>• 定投买入：24,000元 ÷ 5.30元 = 4,528股
+                            <br/>• 累计持股：15,522股（10,480 + 514 + 4,528）
+                            <br/>• 累计投入：74,000元（50,000 + 24,000）
+                            <br/>
+                            <br/><strong>第3年（2026年）：</strong>
+                            <br/>• 年中分红：每股0.27元，共4,191元（15,522股 × 0.27元）
+                            <br/>• 额外买入：每月定投2,000元，全年24,000元
+                            <br/>• 分红再投资：4,191元 ÷ 5.50元 = 761股
+                            <br/>• 定投买入：24,000元 ÷ 5.50元 = 4,364股
+                            <br/>• 累计持股：20,647股
+                            <br/>• 累计投入：98,000元
+                            <br/>
+                            <br/><strong>第4年（2027年）：</strong>
+                            <br/>• 年中分红：每股0.28元，共5,781元
+                            <br/>• 额外买入：每月定投2,000元，全年24,000元
+                            <br/>• 分红再投资：5,781元 ÷ 5.70元 = 1,014股
+                            <br/>• 定投买入：24,000元 ÷ 5.70元 = 4,211股
+                            <br/>• 累计持股：25,872股
+                            <br/>• 累计投入：122,000元
+                            <br/>
+                            <br/><strong>第5年（2028年）：</strong>
+                            <br/>• 年中分红：每股0.30元，共7,762元
+                            <br/>• 额外买入：每月定投2,000元，全年24,000元
+                            <br/>• 分红再投资：7,762元 ÷ 6.00元 = 1,294股
+                            <br/>• 定投买入：24,000元 ÷ 6.00元 = 4,000股
+                            <br/>• 累计持股：31,166股
+                            <br/>• 累计投入：146,000元
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="💰 5年后的盈利分析" size="small" :bordered="true">
+                          <n-text>
+                            <strong>假设第5年末股价为6.50元：</strong>
+                            <br/>
+                            <br/><strong>持仓情况：</strong>
+                            <br/>• 总持股数量：31,166股
+                            <br/>• 总投入资金：146,000元
+                            <br/>• 平均成本：146,000 ÷ 31,166 = 4.68元/股
+                            <br/>
+                            <br/><strong>资产价值：</strong>
+                            <br/>• 当前市值：31,166股 × 6.50元 = 202,579元
+                            <br/>• 累计分红收入：2,500 + 2,725 + 4,191 + 5,781 + 7,762 = 22,959元
+                            <br/>
+                            <br/><strong>总收益：</strong>
+                            <br/>• 价差收益：202,579 - 146,000 = 56,579元
+                            <br/>• 分红收益：22,959元
+                            <br/>• 总收益：56,579 + 22,959 = 79,538元
+                            <br/>• 总收益率：(79,538 / 146,000) × 100% = <strong style="color: #18a058;">54.48%</strong>
+                            <br/>
+                            <br/><strong>年化收益率：</strong>
+                            <br/>• 5年总收益率：54.48%
+                            <br/>• 年化收益率：约 <strong style="color: #18a058;">9.1%</strong>（复利计算）
+                            <br/>
+                            <br/><strong>关键优势：</strong>
+                            <br/>✓ 分红收益稳定，每年都有现金流入
+                            <br/>✓ 分红再投资，享受复利增长
+                            <br/>✓ 持续定投，降低平均成本
+                            <br/>✓ 长期持有，获得价差收益
+                            <br/>✓ 风险相对较低，适合稳健投资者
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="📈 不同分红率下的收益对比" size="small" :bordered="true">
+                          <n-text>
+                            <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+                              <thead>
+                                <tr style="background-color: var(--n-color-hover);">
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: left;">分红率</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">年分红收益（10,000股）</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">5年累计分红</th>
+                                  <th style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">复利后总收益</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">3%</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">1,500元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">7,500元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">约8,200元</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">4%</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">2,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">10,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">约11,200元</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">5%</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">2,500元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">12,500元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">约14,500元</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color);">6%</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">3,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right;">15,000元</td>
+                                  <td style="padding: 8px; border: 1px solid var(--n-border-color); text-align: right; color: #18a058;">约17,800元</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                            <br/>
+                            <n-text depth="3">
+                              * 假设初始投入50,000元买入10,000股（5元/股），分红再投资，不考虑价差收益
+                            </n-text>
+                          </n-text>
+                        </n-card>
+                        
+                        <n-card title="💡 分红策略的关键要点" size="small" :bordered="true">
+                          <n-space vertical>
+                            <n-card title="1. 选择优质分红股票" size="small" :bordered="true">
+                              <n-text>
+                                <strong>筛选标准：</strong>
+                                <br/>• 分红率稳定在3%以上
+                                <br/>• 连续多年稳定分红
+                                <br/>• 公司盈利稳定，现金流充足
+                                <br/>• 行业地位稳固，竞争优势明显
+                                <br/>• 估值合理，PE、PB处于合理区间
+                              </n-text>
+                            </n-card>
+                            
+                            <n-card title="2. 持续买入策略" size="small" :bordered="true">
+                              <n-text>
+                                <strong>定投方式：</strong>
+                                <br/>• 每月固定金额买入
+                                <br/>• 股价低时多买，高时少买
+                                <br/>• 长期坚持，不要中断
+                                <br/>• 分红后立即再投资
+                              </n-text>
+                            </n-card>
+                            
+                            <n-card title="3. 长期持有" size="small" :bordered="true">
+                              <n-text>
+                                <strong>持有周期：</strong>
+                                <br/>• 分红策略适合长期持有（5年以上）
+                                <br/>• 不要频繁买卖，减少交易成本
+                                <br/>• 享受复利增长效应
+                                <br/>• 忽略短期股价波动
+                              </n-text>
+                            </n-card>
+                            
+                            <n-card title="4. 风险控制" size="small" :bordered="true">
+                              <n-text>
+                                <strong>注意事项：</strong>
+                                <br/>• 分散投资，不要只买一只股票
+                                <br/>• 关注公司基本面变化
+                                <br/>• 如果公司停止分红或基本面恶化，及时调整
+                                <br/>• 不要因为短期股价下跌而恐慌卖出
+                              </n-text>
+                            </n-card>
+                          </n-space>
+                        </n-card>
+                        
+                        <n-card title="⚠️ 分红策略的局限性" size="small" :bordered="true">
+                          <n-alert type="warning" style="margin-bottom: 12px;">
+                            <ul>
+                              <li><strong>收益相对较慢：</strong>分红策略是稳健型投资，收益增长相对缓慢，不适合追求快速收益的投资者</li>
+                              <li><strong>需要长期资金：</strong>需要能够长期持有的资金，不适合短期资金</li>
+                              <li><strong>股价可能长期不涨：</strong>高分红股票可能长期横盘，主要依靠分红收益</li>
+                              <li><strong>分红可能减少：</strong>公司经营困难时可能减少或停止分红</li>
+                              <li><strong>需要缴税：</strong>分红收益需要缴纳个人所得税（持股1年以上免税）</li>
                             </ul>
                           </n-alert>
                         </n-card>
