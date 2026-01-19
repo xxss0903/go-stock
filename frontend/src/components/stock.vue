@@ -3693,7 +3693,7 @@ function calculateTarget() {
                   :title="result['股票名称']" :closable="false"
                   @close="removeMonitor(result['股票代码'],result['股票名称'],result.key)">
             <n-grid :cols="12" :y-gap="6">
-              <n-gi :span="6">
+              <n-gi :span="12">
                 <n-text :type="result.type">
                   <n-number-animation :duration="1000" :precision="2" :from="result['上次当前价格']"
                                       :to="Number(result['当前价格'])"/>
@@ -3708,10 +3708,6 @@ function calculateTarget() {
                 <n-text size="small" v-if="result.costVolume>0" :type="result.type">
                   <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
                 </n-text>
-              </n-gi>
-              <n-gi :span="6">
-                <stock-spark-line :last-price="Number(result['当前价格'])" :open-price="Number(result['昨日收盘价'])"
-                                  :stock-code="result['股票代码']" :stock-name="result['股票名称']"></stock-spark-line>
               </n-gi>
             </n-grid>
             <n-grid :cols="2" :y-gap="4" :x-gap="4">
