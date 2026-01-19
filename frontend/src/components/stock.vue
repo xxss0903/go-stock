@@ -224,6 +224,8 @@ const feishiInterval = ref(null)
 
 
 const currentGroupId = ref(0)
+// "全部"的sort值，从localStorage读取，默认为0
+const allGroupSort = ref(Number(localStorage.getItem('allGroupSort') || '0'))
 
 
 const theme = computed(() => {
@@ -258,6 +260,13 @@ const groupResults = computed(() => {
     return group
   }
 })
+
+// 排序后的分组列表（包括"全部"）
+const sortedGroupList = computed(() => {
+  const allGroup = { ID: 0, name: '全部', sort: allGroupSort.value }
+  const groups = [allGroup, ...groupList.value]
+  return groups.sort((a, b) => a.sort - b.sort)
+})
 const showPopover = ref(false)
 // 拖拽相关变量
 const dragSourceIndex = ref(null)
@@ -265,11 +274,7 @@ const dragTargetIndex = ref(null)
 
 // 拖拽处理函数
 function handleTabDragStart(event, name) {
-  // "全部"标签（name=0）不应该触发拖拽
-  if (name === 0) {
-    event.preventDefault();
-    return;
-  }
+  // 允许"全部"标签也参与拖拽
   dragSourceIndex.value = name;
   event.dataTransfer.effectAllowed = 'move';
   event.target.classList.add('tab-dragging');
@@ -283,15 +288,13 @@ function handleTabDragOver(event) {
 
 function handleTabDragEnter(event, name) {
   event.preventDefault();
-  // "全部"标签（name=0）不应该作为拖拽目标
-  if (name > 0) {
-    dragTargetIndex.value = name;
-    if (event.target.classList) {
-      // 查找最近的标签元素并添加高亮样式
-      let tabElement = event.target.closest('.n-tabs-tab');
-      if (tabElement) {
-        tabElement.classList.add('tab-drag-over');
-      }
+  // 允许"全部"标签也作为拖拽目标
+  dragTargetIndex.value = name;
+  if (event.target.classList) {
+    // 查找最近的标签元素并添加高亮样式
+    let tabElement = event.target.closest('.n-tabs-tab');
+    if (tabElement) {
+      tabElement.classList.add('tab-drag-over');
     }
   }
 }
@@ -317,18 +320,64 @@ function handleTabDrop(event) {
   if (dragSourceIndex.value !== null && dragTargetIndex.value !== null &&
     dragSourceIndex.value !== dragTargetIndex.value) {
 
-    // 确保索引有效（排除"全部"选项卡）
-    if (dragSourceIndex.value > 0 && dragTargetIndex.value > 0) {
-      // 查找源分组和目标分组
-      const sourceGroup = groupList.value.find(g => g.ID === dragSourceIndex.value);
-      const targetGroup = groupList.value.find(g => g.ID === dragTargetIndex.value);
+    const sourceId = dragSourceIndex.value;
+    const targetId = dragTargetIndex.value;
+    
+    // 获取目标分组的sort值
+    let targetSort = 0;
+    if (targetId === 0) {
+      // 目标是"全部"
+      targetSort = allGroupSort.value;
+    } else {
+      // 目标是自定义分组
+      const targetGroup = groupList.value.find(g => g.ID === targetId);
+      if (targetGroup) {
+        targetSort = targetGroup.sort;
+      } else {
+        // 重置状态
+        dragSourceIndex.value = null;
+        dragTargetIndex.value = null;
+        return;
+      }
+    }
 
-      if (sourceGroup && targetGroup) {
-        // 计算新的位置序号（使用目标分组的sort值）
-        const newSortPosition = targetGroup.sort;
-
+    if (sourceId === 0) {
+      // 拖拽的是"全部"
+      // 更新"全部"的sort值
+      allGroupSort.value = targetSort;
+      localStorage.setItem('allGroupSort', String(targetSort));
+      // 通知App.vue更新菜单
+      EventsEmit("updateAllGroupSort", { sort: targetSort });
+      message.success('分组排序更新成功');
+      // 重新获取分组列表以更新界面
+      GetGroupList().then(result => {
+        groupList.value = result;
+      });
+    } else if (targetId === 0) {
+      // 拖拽自定义分组到"全部"位置
+      const sourceGroup = groupList.value.find(g => g.ID === sourceId);
+      if (sourceGroup) {
+        // 更新自定义分组的sort值为"全部"的sort值
+        UpdateGroupSort(sourceGroup.ID, allGroupSort.value).then(result => {
+          if (result) {
+            message.success('分组排序更新成功');
+            // 重新获取分组列表以更新界面
+            GetGroupList().then(result => {
+              groupList.value = result;
+            });
+          } else {
+            message.error('分组排序更新失败');
+          }
+        }).catch(error => {
+          message.error('分组排序更新失败: ' + error.message);
+        });
+      }
+    } else {
+      // 拖拽的是自定义分组
+      const sourceGroup = groupList.value.find(g => g.ID === sourceId);
+      if (sourceGroup) {
         // 调用后端API更新组排序
-        UpdateGroupSort(sourceGroup.ID, newSortPosition).then(result => {
+        UpdateGroupSort(sourceGroup.ID, targetSort).then(result => {
           if (result) {
             message.success('分组排序更新成功');
             // 重新获取分组列表以更新界面
@@ -362,6 +411,9 @@ function handleTabDragEnd(event) {
 }
 
 onBeforeMount(() => {
+  // 从localStorage读取"全部"的sort值
+  allGroupSort.value = Number(localStorage.getItem('allGroupSort') || '0')
+  
   GetGroupList().then(result => {
     groupList.value = result
     // 检查是否存在相同的序号
@@ -374,9 +426,27 @@ onBeforeMount(() => {
       fetchGroupList();
     } else {
       // 没有重复序号，继续正常流程
-      if (route.query.groupId) {
-        message.success("切换分组:" + route.query.groupName)
-        currentGroupId.value = Number(route.query.groupId)
+      if (route.query.groupId !== undefined) {
+        // 如果路由上已经带了groupId，就按照路由参数来
+        const gid = Number(route.query.groupId)
+        currentGroupId.value = gid
+        if (route.query.groupName) {
+          message.success("切换分组:" + route.query.groupName)
+        }
+      } else if (groupList.value.length > 0) {
+        // 否则使用分组中排在最前面的那个作为默认分组（不包含“全部”）
+        const firstGroup = groupList.value[0]
+        currentGroupId.value = firstGroup.ID
+        // 更新路由上的查询参数，保持状态一致
+        router.replace({
+          name: 'stock',
+          query: {
+            groupName: firstGroup.name,
+            groupId: firstGroup.ID,
+          },
+        })
+        // 触发一次切换分组逻辑，加载该分组的股票
+        updateTab(String(firstGroup.ID))
       }
     }
   })
@@ -807,12 +877,29 @@ function initDraggableTabs() {
   setTimeout(() => {
     const tabs = document.querySelectorAll('.n-tabs-tab');
     tabs.forEach((tab, index) => {
+      // 从tab的data-name属性获取ID
+      let name = null;
       const dataIndex = tab.getAttribute('data-name');
-      const name = parseInt(dataIndex);
+      if (dataIndex) {
+        name = parseInt(dataIndex);
+      } else {
+        // 尝试从tab的文本内容匹配
+        const tabText = tab.textContent?.trim();
+        if (tabText === '全部') {
+          name = 0;
+        } else {
+          // 从sortedGroupList中查找匹配的分组
+          const matchedGroup = sortedGroupList.value.find(g => g.name === tabText);
+          if (matchedGroup) {
+            name = matchedGroup.ID;
+          }
+        }
+      }
 
-      // 只为分组标签（name > 0）添加拖拽功能
-      if (name > 0) {
+      // 为所有标签（包括"全部"）添加拖拽功能
+      if (!isNaN(name) && name !== null) {
         tab.setAttribute('draggable', 'true');
+        tab.setAttribute('data-name', String(name));
         tab.addEventListener('dragstart', (e) => handleTabDragStart(e, name));
         tab.addEventListener('dragover', handleTabDragOver);
         tab.addEventListener('dragenter', (e) => handleTabDragEnter(e, name));
@@ -3357,10 +3444,30 @@ function calculateTarget() {
   <n-tabs type="card" style="--wails-draggable:no-drag" animated addable :data-currentGroupId="currentGroupId"
           :value="String(currentGroupId)" @add="addTab" @update:value="updateTab" placement="top" @close="(key)=>{delTab(key)}">
 
-    <n-tab-pane closable name="0" :tab="'全部'">
-      <!-- 卡片式显示 -->
-      <n-grid v-if="displayMode === 'card'" :x-gap="8" :cols="3" :y-gap="8">
-        <n-gi :id="result['股票代码']+'_gi'" v-for="result in sortedResults" style="margin-left: 2px;">
+    <n-tab-pane v-for="group in sortedGroupList" :key="group.ID" :closable="group.ID !== 0" :name="String(group.ID)" :data-name="String(group.ID)">
+      <template #tab v-if="group.ID === 0">
+        <span :data-name="'0'">全部</span>
+      </template>
+      <template #tab v-else>
+        <span v-if="editingGroupId !== group.ID" @dblclick.stop="startEditGroup(group.ID, group.name)" style="cursor: pointer; user-select: none;" :data-name="String(group.ID)">
+          {{ group.name }}
+        </span>
+        <n-input
+          v-else
+          v-model:value="editingGroupName"
+          size="small"
+          style="width: 120px;"
+          @blur="saveGroupName(group.ID)"
+          @keyup.enter="saveGroupName(group.ID)"
+          @keyup.esc="cancelEditGroup"
+          autofocus
+        />
+      </template>
+      <!-- "全部"分组的内容 -->
+      <template v-if="group.ID === 0">
+        <!-- 卡片式显示 -->
+        <n-grid v-if="displayMode === 'card'" :x-gap="8" :cols="3" :y-gap="8">
+          <n-gi :id="result['股票代码']+'_gi'" v-for="result in sortedResults" style="margin-left: 2px;">
           <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"
                   :title="result['股票名称']" :closable="false"
                   @close="removeMonitor(result['股票代码'],result['股票名称'],result.key)">
@@ -3576,26 +3683,12 @@ function calculateTarget() {
           </n-card>
         </n-list-item>
       </n-list>
-    </n-tab-pane>
-    <n-tab-pane closable v-for="group in groupList" :group-id="group.ID" :name="String(group.ID)">
-      <template #tab>
-        <span v-if="editingGroupId !== group.ID" @dblclick.stop="startEditGroup(group.ID, group.name)" style="cursor: pointer; user-select: none;">
-          {{ group.name }}
-        </span>
-        <n-input
-          v-else
-          v-model:value="editingGroupName"
-          size="small"
-          style="width: 120px;"
-          @blur="saveGroupName(group.ID)"
-          @keyup.enter="saveGroupName(group.ID)"
-          @keyup.esc="cancelEditGroup"
-          autofocus
-        />
       </template>
-      <!-- 卡片式显示 -->
-      <n-grid v-if="displayMode === 'card'" :x-gap="8" :cols="3" :y-gap="8">
-        <n-gi :id="result['股票代码']+'_gi'" v-for="result in groupResults" style="margin-left: 2px;">
+      <!-- 其他分组的内容 -->
+      <template v-else>
+        <!-- 卡片式显示 -->
+        <n-grid v-if="displayMode === 'card'" :x-gap="8" :cols="3" :y-gap="8">
+          <n-gi :id="result['股票代码']+'_gi'" v-for="result in groupResults" style="margin-left: 2px;">
           <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"
                   :title="result['股票名称']" :closable="false"
                   @close="removeMonitor(result['股票代码'],result['股票名称'],result.key)">
@@ -3819,6 +3912,7 @@ function calculateTarget() {
           </n-card>
         </n-list-item>
       </n-list>
+      </template>
     </n-tab-pane>
     
   </n-tabs>

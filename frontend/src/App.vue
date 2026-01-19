@@ -55,6 +55,8 @@ const realtimeProfit = ref(0)
 const telegraph = ref([])
 const groupList = ref([])
 const officialStatement= ref("")
+// "全部"的sort值，从localStorage读取，默认为0
+const allGroupSort = ref(Number(localStorage.getItem('allGroupSort') || '0'))
 const menuOptions = ref([
   {
     label: () =>
@@ -63,14 +65,47 @@ const menuOptions = ref([
             {
               to: {
                 name: 'stock',
-                query: {
-                  groupName: '全部',
-                  groupId: 0,
-                },
+                query: {},
                 params: {},
               },
               onClick: () => {
                 activeKey.value = 'stock'
+                // 获取排序后的第一个分组（优先自定义分组，如果没有则使用"全部"）
+                if (groupList.value && groupList.value.length > 0) {
+                  // 获取排序后的第一个自定义分组（排除"全部"）
+                  const sortedGroups = [...groupList.value].sort((a, b) => a.sort - b.sort)
+                  
+                  if (sortedGroups.length > 0) {
+                    // 使用第一个自定义分组
+                    const firstGroup = sortedGroups[0]
+                    router.push({
+                      name: 'stock',
+                      query: {
+                        groupName: firstGroup.name,
+                        groupId: firstGroup.ID,
+                      },
+                    })
+                    setTimeout(() => {
+                      EventsEmit("changeTab", firstGroup)
+                    }, 100)
+                  } else {
+                    // 没有自定义分组，使用"全部"
+                    router.push({
+                      name: 'stock',
+                      query: {
+                        groupName: '全部',
+                        groupId: 0,
+                      },
+                    })
+                    EventsEmit("changeTab", {ID: 0, name: '全部', sort: allGroupSort.value})
+                  }
+                } else {
+                  // 如果还没有加载分组列表，先跳转到默认路由，让stock.vue处理
+                  router.push({
+                    name: 'stock',
+                    query: {},
+                  })
+                }
               },
             },
             {default: () => '股票自选',}
@@ -95,7 +130,7 @@ const menuOptions = ref([
                         groupId: 0,
                       },
                     })
-                    EventsEmit("changeTab", {ID: 0, name: '全部'})
+                    EventsEmit("changeTab", {ID: 0, name: '全部', sort: allGroupSort.value})
                   },
                   to: {
                     name: 'stock',
@@ -108,6 +143,7 @@ const menuOptions = ref([
                 {default: () => '全部',}
             ),
         key: 0,
+        sort: allGroupSort.value,
       }
     ],
   },
@@ -621,6 +657,7 @@ onBeforeMount(() => {
     menuOptions.value.map((item) => {
       //console.log(item)
       if (item.key === 'stock') {
+        // 添加自定义分组
         item.children.push(...groupList.value.map(item => {
           return {
             label: () =>
@@ -653,8 +690,31 @@ onBeforeMount(() => {
                     {default: () => item.name,}
                 ),
             key: item.ID,
+            sort: item.sort,
           }
         }))
+        // 根据sort值排序children（包括"全部"）
+        item.children.sort((a, b) => {
+          const sortA = a.sort !== undefined ? a.sort : allGroupSort.value
+          const sortB = b.sort !== undefined ? b.sort : allGroupSort.value
+          return sortA - sortB
+        })
+      }
+    })
+  })
+  
+  // 监听"全部"sort值的变化，更新菜单
+  EventsOn("updateAllGroupSort", (data) => {
+    allGroupSort.value = data.sort
+    localStorage.setItem('allGroupSort', String(data.sort))
+    // 重新排序菜单
+    menuOptions.value.map((item) => {
+      if (item.key === 'stock') {
+        item.children.sort((a, b) => {
+          const sortA = a.sort !== undefined ? a.sort : allGroupSort.value
+          const sortB = b.sort !== undefined ? b.sort : allGroupSort.value
+          return sortA - sortB
+        })
       }
     })
   })
