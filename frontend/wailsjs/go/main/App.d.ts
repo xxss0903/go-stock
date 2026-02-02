@@ -3,6 +3,7 @@
 import {data} from '../models';
 import {models} from '../models';
 import {context} from '../models';
+import {time} from '../models';
 
 export function AddCronTask(arg1:data.FollowedStock):Promise<any>;
 
@@ -134,7 +135,7 @@ export function SendDingDingMessageByType(arg1:string,arg2:string,arg3:number):P
 
 export function SetAlarmChangePercent(arg1:number,arg2:number,arg3:string):Promise<string>;
 
-export function SetCostPriceAndVolume(arg1:string,arg2:number,arg3:number):Promise<string>;
+export function SetCostPriceAndVolume(arg1:string,arg2:number,arg3:number,arg4:time.Time):Promise<string>;
 
 export function SetStockAICron(arg1:string,arg2:string):Promise<void>;
 

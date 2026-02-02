@@ -865,6 +865,14 @@ func addStockFollowData(follow data.FollowedStock, stockData *data.StockInfo) {
 	stockData.AlarmChangePercent = follow.AlarmChangePercent
 	stockData.AlarmPrice = follow.AlarmPrice
 	stockData.Groups = follow.Groups
+	stockData.BuyDate = follow.BuyDate // 买入日期
+	
+	// 计算持有天数
+	if follow.BuyDate != nil {
+		now := time.Now()
+		holdingDays := int(now.Sub(*follow.BuyDate).Hours() / 24)
+		stockData.HoldingDays = holdingDays
+	}
 
 	//当前价格
 	price, _ := convertor.ToFloat(stockData.Price)
@@ -968,8 +976,8 @@ func (a *App) GetStockList(key string) []data.StockBasic {
 	return data.NewStockDataApi().GetStockList(key)
 }
 
-func (a *App) SetCostPriceAndVolume(stockCode string, price float64, volume int64) string {
-	return data.NewStockDataApi().SetCostPriceAndVolume(price, volume, stockCode)
+func (a *App) SetCostPriceAndVolume(stockCode string, price float64, volume int64, buyDate *time.Time) string {
+	return data.NewStockDataApi().SetCostPriceAndVolume(price, volume, stockCode, buyDate)
 }
 
 func (a *App) SetAlarmChangePercent(val, alarmPrice float64, stockCode string) string {

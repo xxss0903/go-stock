@@ -44,6 +44,7 @@ import {
   NButton,
   NButtonGroup,
   NDataTable,
+  NDatePicker,
   NDropdown,
   NEllipsis,
   NEmpty,
@@ -145,6 +146,7 @@ const formModel = ref({
   code: "",
   costPrice: 0.000,
   volume: 0,
+  buyDate: null, // 买入日期
   alarm: 0,
   alarmPrice: 0,
   sort: 999,
@@ -1254,6 +1256,7 @@ function setStock(code, name) {
   formModel.value.code = code
   formModel.value.volume = res[0].Volume ? res[0].Volume : 0
   formModel.value.costPrice = res[0].CostPrice
+  formModel.value.buyDate = res[0].BuyDate ? new Date(res[0].BuyDate) : null
   formModel.value.alarm = res[0].AlarmChangePercent
   formModel.value.alarmPrice = res[0].AlarmPrice
   formModel.value.sort = res[0].Sort
@@ -1924,7 +1927,12 @@ function updateCostPriceAndVolumeNew(code, price, volume, alarm, formModel) {
       //message.success(result)
     })
   }
-  SetCostPriceAndVolume(code, price, volume).then(result => {
+  // 转换买入日期为时间戳或null
+  let buyDateValue = null
+  if (formModel.buyDate) {
+    buyDateValue = new Date(formModel.buyDate)
+  }
+  SetCostPriceAndVolume(code, price, volume, buyDateValue).then(result => {
     modalShow.value = false
     message.success(result)
     GetFollowList(currentGroupId.value).then(result => {
@@ -3563,14 +3571,20 @@ function calculateTarget() {
               </n-button>
             </template>
             <template #footer>
-              <n-flex justify="center">
-                <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
-                <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
-                  {{
-                    "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
-                  }}
-                </n-tag>
+              <n-flex justify="center" vertical>
+                <n-flex justify="center">
+                  <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
+                  <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
+                  <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
+                    {{
+                      "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                    }}
+                  </n-tag>
+                </n-flex>
+                <n-flex justify="center" v-if="result.buyDate">
+                  <n-text size="small" type="info">买入日期: {{ new Date(result.buyDate).toLocaleDateString('zh-CN') }}</n-text>
+                  <n-text size="small" type="info" v-if="result.holdingDays >= 0">持有天数: {{ result.holdingDays }}天</n-text>
+                </n-flex>
               </n-flex>
             </template>
             <template #action>
@@ -3658,6 +3672,10 @@ function calculateTarget() {
                   </n-tag>
                   <n-text v-if="result.costVolume>0" size="small" :type="result.type">
                     盈亏: <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
+                  </n-text>
+                  <n-text v-if="result.buyDate" size="small" type="info">
+                    买入: {{ new Date(result.buyDate).toLocaleDateString('zh-CN') }}
+                    <span v-if="result.holdingDays >= 0"> ({{ result.holdingDays }}天)</span>
                   </n-text>
                 </n-flex>
               </n-gi>
@@ -3787,14 +3805,20 @@ function calculateTarget() {
               </n-button>
             </template>
             <template #footer>
-              <n-flex justify="center">
-                <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
-                <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
-                  {{
-                    "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
-                  }}
-                </n-tag>
+              <n-flex justify="center" vertical>
+                <n-flex justify="center">
+                  <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
+                  <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
+                  <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
+                    {{
+                      "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                    }}
+                  </n-tag>
+                </n-flex>
+                <n-flex justify="center" v-if="result.buyDate">
+                  <n-text size="small" type="info">买入日期: {{ new Date(result.buyDate).toLocaleDateString('zh-CN') }}</n-text>
+                  <n-text size="small" type="info" v-if="result.holdingDays >= 0">持有天数: {{ result.holdingDays }}天</n-text>
+                </n-flex>
               </n-flex>
             </template>
             <template #action>
@@ -3963,6 +3987,9 @@ function calculateTarget() {
             股
           </template>
         </n-input-number>
+      </n-form-item>
+      <n-form-item label="买入日期" path="buyDate">
+        <n-date-picker v-model:value="formModel.buyDate" type="date" placeholder="请选择买入日期" clearable />
       </n-form-item>
       <n-form-item label="涨跌提醒" path="alarm">
         <n-input-number v-model:value="formModel.alarm" min="0" placeholder="请输入涨跌报警值(%)">

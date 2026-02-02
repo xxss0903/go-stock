@@ -93,6 +93,8 @@ type StockInfo struct {
 	Sort               int64   `json:"sort"` //排序
 	AlarmChangePercent float64 `json:"alarmChangePercent"`
 	AlarmPrice         float64 `json:"alarmPrice"`
+	BuyDate            *time.Time `json:"buyDate"` // 买入日期
+	HoldingDays        int      `json:"holdingDays"` // 持有天数
 
 	Groups []GroupStock `gorm:"-:all"`
 }
@@ -162,6 +164,7 @@ type FollowedStock struct {
 	Name               string
 	Volume             int64
 	CostPrice          float64
+	BuyDate            *time.Time `json:"buyDate"` // 买入日期
 	Price              float64
 	PriceChange        float64
 	ChangePercent      float64
@@ -459,13 +462,20 @@ func (receiver StockDataApi) UnFollow(stockCode string) string {
 	return "取消关注成功"
 }
 
-func (receiver StockDataApi) SetCostPriceAndVolume(price float64, volume int64, stockCode string) string {
+func (receiver StockDataApi) SetCostPriceAndVolume(price float64, volume int64, stockCode string, buyDate *time.Time) string {
 	if strutil.HasPrefixAny(stockCode, []string{"gb_"}) {
 		stockCode = strings.ToUpper(stockCode)
 		stockCode = strings.Replace(stockCode, "gb_", "us", 1)
 		stockCode = strings.Replace(stockCode, "GB_", "us", 1)
 	}
-	err := db.Dao.Model(&FollowedStock{}).Where("stock_code = ?", strings.ToLower(stockCode)).Update("cost_price", price).Update("volume", volume).Error
+	updates := map[string]interface{}{
+		"cost_price": price,
+		"volume":     volume,
+	}
+	if buyDate != nil {
+		updates["buy_date"] = buyDate
+	}
+	err := db.Dao.Model(&FollowedStock{}).Where("stock_code = ?", strings.ToLower(stockCode)).Updates(updates).Error
 	if err != nil {
 		logger.SugaredLogger.Error(err.Error())
 		return "设置失败"

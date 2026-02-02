@@ -262,8 +262,8 @@ export function SetAlarmChangePercent(arg1, arg2, arg3) {
   return window['go']['main']['App']['SetAlarmChangePercent'](arg1, arg2, arg3);
 }
 
-export function SetCostPriceAndVolume(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SetCostPriceAndVolume'](arg1, arg2, arg3);
+export function SetCostPriceAndVolume(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SetCostPriceAndVolume'](arg1, arg2, arg3, arg4);
 }
 
 export function SetStockAICron(arg1, arg2) {
