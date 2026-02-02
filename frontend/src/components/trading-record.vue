@@ -355,7 +355,7 @@ function loadLimitUpDownSectors() {
   });
   
   // 同时加载Tushare的涨跌停股票列表
-  loadLimitStocksFromTushare(dateStr);
+  // loadLimitStocksFromTushare(dateStr);
 }
 
 function loadLimitStocksFromTushare(dateStr) {
@@ -395,7 +395,7 @@ function showLimitStocks(type) {
   showLimitStocksModal.value = true;
   const date = tradeDate.value instanceof Date ? tradeDate.value : new Date(tradeDate.value);
   const dateStr = date.toISOString().split('T')[0];
-  loadLimitStocksFromTushare(dateStr);
+  // loadLimitStocksFromTushare(dateStr);
 }
 
 function editRecord(record) {
