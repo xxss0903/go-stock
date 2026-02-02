@@ -1556,6 +1556,58 @@ function handleKLine() {
       ])
       volumns.push([i, resultElement.volume / 10000, flag])
     }
+
+    // 计算买入点（使用自选里录入的买入日期和成本价）
+    let buyPoint = null
+    if (followList.value && followList.value.length > 0) {
+      const follow = followList.value.find(item => item.StockCode === data.code)
+      if (follow && follow.BuyDate) {
+        const buyDateObj = new Date(follow.BuyDate)
+        if (!isNaN(buyDateObj.getTime())) {
+          // 在K线日期中找到买入日期之后的第一个交易日
+          for (let i = 0; i < categoryData.length; i++) {
+            const day = categoryData[i]
+            const dayObj = new Date(day)
+            if (isNaN(dayObj.getTime())) {
+              continue
+            }
+            if (dayObj.getTime() >= buyDateObj.getTime()) {
+              const buyPrice = follow.CostPrice > 0 ? follow.CostPrice : values[i][1]
+              buyPoint = {
+                name: '买入',
+                coord: [day, buyPrice],
+                value: buyPrice.toFixed ? buyPrice.toFixed(2) : buyPrice,
+                itemStyle: {
+                  color: '#F59E0B'
+                }
+              }
+              break
+            }
+          }
+        }
+      }
+    }
+
+    const markPointData = [
+      {
+        name: '最高',
+        type: 'max',
+        valueDim: 'highest'
+      },
+      {
+        name: '最低',
+        type: 'min',
+        valueDim: 'lowest'
+      },
+      {
+        name: '平均收盘价',
+        type: 'average',
+        valueDim: 'close'
+      }
+    ]
+    if (buyPoint) {
+      markPointData.push(buyPoint)
+    }
     ////console.log("categoryData",categoryData)
     ////console.log("values",values)
     let option = {
@@ -1733,23 +1785,7 @@ function handleKLine() {
                 return param != null ? param.value + '' : '';
               }
             },
-            data: [
-              {
-                name: '最高',
-                type: 'max',
-                valueDim: 'highest'
-              },
-              {
-                name: '最低',
-                type: 'min',
-                valueDim: 'lowest'
-              },
-              {
-                name: '平均收盘价',
-                type: 'average',
-                valueDim: 'close'
-              }
-            ],
+            data: markPointData,
             tooltip: {
               formatter: function (param) {
                 return param.name + '<br>' + (param.data.coord || '');
