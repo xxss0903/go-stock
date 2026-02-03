@@ -136,6 +136,17 @@ const modalShow4 = ref(false)
 const modalShow5 = ref(false)
 const summaryModal = ref(false) // AI总结对话框
 const aiStockSelectModal = ref(false) // AI选股对话框
+const tradeRecordModal = ref(false) // 买入卖出记录弹窗
+const tradeRecordType = ref("buy") // buy | sell
+const tradeRecordStock = reactive({ code: "", name: "" })
+const tradeRecords = ref({})
+const tradeRecordForm = reactive({
+  date: null,
+  price: null,
+  volume: null,
+  note: ""
+})
+const editingTradeRecord = ref({ type: "", id: null })
 const addBTN = ref(true)
 const editingGroupId = ref(null) // 正在编辑的分组ID
 const editingGroupName = ref('') // 正在编辑的分组名称
@@ -810,6 +821,7 @@ onMounted(() => {
   onBeforeUnmount(() => {
     unwatch();
   });
+  loadTradeRecords()
   message.loading("Loading...")
   GetFollowList(currentGroupId.value).then(result => {
 
@@ -1153,6 +1165,7 @@ async function updateData(result) {
   } else if (result.profitAmount < 0) {
     result.profitType = "success"
   }
+  applyTradeHoldingToResult(result)
   if (result["当前价格"]) {
     if (result.alarmChangePercent > 0 && Math.abs(result.changePercent) >= result.alarmChangePercent) {
       SendMessage(result, 1)
@@ -1537,6 +1550,270 @@ function calculateMA(dayCount, values) {
   return result;
 }
 
+function normalizeDateKey(value) {
+  if (!value) return "";
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 8 ? digits.slice(0, 8) : "";
+}
+
+function parseDateKey(key) {
+  if (!key || key.length < 8) return null;
+  const year = key.slice(0, 4);
+  const month = key.slice(4, 6);
+  const day = key.slice(6, 8);
+  const date = new Date(`${year}-${month}-${day}`);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function calculateTradeHolding(code, currentPrice) {
+  const bucket = tradeRecords.value[code]
+  if (!bucket) return null
+  const buys = Array.isArray(bucket.buys) ? bucket.buys : []
+  const sells = Array.isArray(bucket.sells) ? bucket.sells : []
+  const totalBuyVolume = buys.reduce((sum, item) => sum + (Number(item.volume) || 0), 0)
+  const totalSellVolume = sells.reduce((sum, item) => sum + (Number(item.volume) || 0), 0)
+  const totalBuyAmount = buys.reduce((sum, item) => sum + (Number(item.volume) || 0) * (Number(item.price) || 0), 0)
+  const avgBuy = totalBuyVolume > 0 ? totalBuyAmount / totalBuyVolume : 0
+  const holdingVolume = Math.max(totalBuyVolume - totalSellVolume, 0)
+  const holdingAmount = holdingVolume * avgBuy
+  const profitAmount = currentPrice && avgBuy > 0 ? (Number(currentPrice) - avgBuy) * holdingVolume : 0
+  const profitPercent = avgBuy > 0 ? ((Number(currentPrice) - avgBuy) / avgBuy) * 100 : 0
+  return {
+    hasRecords: buys.length > 0 || sells.length > 0,
+    holdingVolume,
+    holdingCostPrice: avgBuy,
+    holdingAmount,
+    profitAmount,
+    profitPercent
+  }
+}
+
+function applyTradeHoldingToResult(result) {
+  const holding = calculateTradeHolding(result["股票代码"], result["当前价格"])
+  if (!holding || !holding.hasRecords) {
+    result.tradeHoldingVolume = null
+    result.tradeHoldingCostPrice = null
+    result.tradeHoldingAmount = null
+    result.tradeHoldingProfitAmount = null
+    result.tradeHoldingProfitPercent = null
+    result.tradeHoldingProfitType = null
+    return
+  }
+  result.tradeHoldingVolume = holding.holdingVolume
+  result.tradeHoldingCostPrice = holding.holdingCostPrice
+  result.tradeHoldingAmount = holding.holdingAmount
+  result.tradeHoldingProfitAmount = holding.profitAmount
+  result.tradeHoldingProfitPercent = holding.profitPercent
+  if (holding.profitAmount > 0) {
+    result.tradeHoldingProfitType = "error"
+  } else if (holding.profitAmount < 0) {
+    result.tradeHoldingProfitType = "success"
+  } else {
+    result.tradeHoldingProfitType = "default"
+  }
+}
+
+function formatHoldingNumber(value, digits = 2) {
+  const num = Number(value)
+  if (Number.isNaN(num)) return "-"
+  return num.toFixed(digits)
+}
+
+function getHoldingVolume(result) {
+  return result.tradeHoldingVolume > 0 ? result.tradeHoldingVolume : (result.volume || 0)
+}
+
+function getHoldingCostPrice(result) {
+  return result.tradeHoldingCostPrice > 0 ? result.tradeHoldingCostPrice : (result.costPrice || 0)
+}
+
+function getHoldingProfitPercent(result) {
+  return result.tradeHoldingProfitPercent ?? result.profit
+}
+
+function getHoldingProfitAmount(result) {
+  return result.tradeHoldingProfitAmount ?? result.profitAmount
+}
+
+function getHoldingProfitType(result) {
+  return result.tradeHoldingProfitType || result.profitType
+}
+
+function refreshHoldingForCode(code) {
+  if (!code) return
+  const entries = Object.entries(results.value)
+  let updated = false
+  for (const [key, value] of entries) {
+    if (value["股票代码"] === code) {
+      applyTradeHoldingToResult(value)
+      results.value[key] = value
+      updated = true
+    }
+  }
+  if (updated) {
+    results.value = { ...results.value }
+  }
+}
+
+const tradeRecordColumns = (type) => ([
+  { title: '日期', key: 'date', width: 120 },
+  {
+    title: '价格',
+    key: 'price',
+    width: 100,
+    render: (row) => row.price ? row.price.toFixed(2) : '-'
+  },
+  { title: '数量', key: 'volume', width: 100 },
+  { title: '备注', key: 'note' },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 120,
+    render: (row) => h('div', {style: 'display: flex; gap: 6px;'}, [
+      h(NButton, {
+        size: 'small',
+        onClick: () => editTradeRecord(type, row)
+      }, {default: () => '编辑'}),
+      h(NButton, {
+        size: 'small',
+        type: 'error',
+        onClick: () => deleteTradeRecord(type, row)
+      }, {default: () => '删除'})
+    ])
+  }
+])
+
+const currentTradeRecords = computed(() => {
+  const code = tradeRecordStock.code
+  return tradeRecords.value[code] || { buys: [], sells: [] }
+})
+
+function ensureTradeRecordBucket(code) {
+  if (!code) return
+  if (!tradeRecords.value[code]) {
+    tradeRecords.value = {
+      ...tradeRecords.value,
+      [code]: { buys: [], sells: [] }
+    }
+  }
+}
+
+function loadTradeRecords() {
+  try {
+    const raw = localStorage.getItem("stockTradeRecords")
+    tradeRecords.value = raw ? JSON.parse(raw) : {}
+  } catch (e) {
+    tradeRecords.value = {}
+  }
+}
+
+function saveTradeRecords() {
+  localStorage.setItem("stockTradeRecords", JSON.stringify(tradeRecords.value))
+}
+
+function resetTradeRecordForm() {
+  tradeRecordForm.date = new Date()
+  tradeRecordForm.price = null
+  tradeRecordForm.volume = null
+  tradeRecordForm.note = ""
+  editingTradeRecord.value = { type: "", id: null }
+}
+
+function formatDateForRecord(value) {
+  if (!value) return ""
+  const date = value instanceof Date ? value : new Date(value)
+  if (isNaN(date.getTime())) return ""
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseLocalDateFromYmd(value) {
+  if (!value) return null
+  const parts = String(value).split('-')
+  if (parts.length !== 3) return null
+  const year = Number(parts[0])
+  const month = Number(parts[1])
+  const day = Number(parts[2])
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day)
+}
+
+function openTradeRecordModal(type, result) {
+  tradeRecordType.value = type
+  tradeRecordStock.code = result['股票代码']
+  tradeRecordStock.name = result['股票名称']
+  ensureTradeRecordBucket(tradeRecordStock.code)
+  resetTradeRecordForm()
+  tradeRecordModal.value = true
+}
+
+function editTradeRecord(type, record) {
+  tradeRecordType.value = type
+  tradeRecordForm.date = record.date ? parseLocalDateFromYmd(record.date) : new Date()
+  tradeRecordForm.price = record.price
+  tradeRecordForm.volume = record.volume
+  tradeRecordForm.note = record.note || ""
+  editingTradeRecord.value = { type, id: record.id }
+}
+
+function deleteTradeRecord(type, record) {
+  if (!tradeRecordStock.code) return
+  const bucket = tradeRecords.value[tradeRecordStock.code]
+  if (!bucket) return
+  const targetList = type === "buy" ? bucket.buys : bucket.sells
+  const index = targetList.findIndex(item => item.id === record.id)
+  if (index >= 0) {
+    targetList.splice(index, 1)
+    saveTradeRecords()
+    refreshHoldingForCode(tradeRecordStock.code)
+    message.success("记录已删除")
+  }
+}
+
+function addTradeRecord() {
+  const dateStr = formatDateForRecord(tradeRecordForm.date)
+  const price = Number(tradeRecordForm.price)
+  const volume = Number(tradeRecordForm.volume)
+  if (!tradeRecordStock.code) {
+    message.warning("未选择股票")
+    return
+  }
+  if (!dateStr || !price || !volume) {
+    message.warning("请填写日期、价格和数量")
+    return
+  }
+  const bucket = tradeRecords.value[tradeRecordStock.code]
+  const targetList = tradeRecordType.value === "buy" ? bucket.buys : bucket.sells
+  if (editingTradeRecord.value.id && editingTradeRecord.value.type === tradeRecordType.value) {
+    const index = targetList.findIndex(item => item.id === editingTradeRecord.value.id)
+    if (index >= 0) {
+      targetList[index] = {
+        ...targetList[index],
+        date: dateStr,
+        price,
+        volume,
+        note: tradeRecordForm.note || ""
+      }
+    }
+  } else {
+    const record = {
+      id: Date.now(),
+      date: dateStr,
+      price,
+      volume,
+      note: tradeRecordForm.note || ""
+    }
+    targetList.unshift(record)
+  }
+  const isUpdate = editingTradeRecord.value.id && editingTradeRecord.value.type === tradeRecordType.value
+  saveTradeRecords()
+  resetTradeRecordForm()
+  message.success(isUpdate ? "记录已更新" : "记录已添加")
+  refreshHoldingForCode(tradeRecordStock.code)
+}
+
 function handleKLine() {
   GetStockKLine(data.code, data.name, 365).then(result => {
     //console.log("GetStockKLine",result)
@@ -1566,33 +1843,46 @@ function handleKLine() {
     if (followList.value && followList.value.length > 0) {
       const follow = followList.value.find(item => item.StockCode === data.code)
       if (follow && follow.BuyDate) {
-        const buyDateObj = new Date(follow.BuyDate)
-        if (!isNaN(buyDateObj.getTime())) {
-          buyDateStr = follow.BuyDate
-          buyPrice = follow.CostPrice > 0 ? follow.CostPrice : null
-          // 在K线日期中找到买入日期之后的第一个交易日
-          for (let i = 0; i < categoryData.length; i++) {
-            const day = categoryData[i]
-            const dayObj = new Date(day)
-            if (isNaN(dayObj.getTime())) {
-              continue
+        const buyDateKey = normalizeDateKey(follow.BuyDate)
+        const buyDateObj = parseDateKey(buyDateKey)
+        if (!buyDateObj) return
+        buyDateStr = follow.BuyDate
+        buyPrice = follow.CostPrice > 0 ? follow.CostPrice : null
+
+        let exactIndex = -1
+        let nearestIndex = -1
+        let minDiff = Number.MAX_SAFE_INTEGER
+        // 在K线日期中找到买入日期或之后的第一个交易日（兼容 YYYYMMDD / YYYY-MM-DD）
+        for (let i = 0; i < categoryData.length; i++) {
+          const day = categoryData[i]
+          const dayKey = normalizeDateKey(day)
+          if (!dayKey) continue
+          if (dayKey === buyDateKey) {
+            exactIndex = i
+            break
+          }
+          const dayObj = parseDateKey(dayKey)
+          if (!dayObj) continue
+          const diff = dayObj.getTime() - buyDateObj.getTime()
+          if (diff >= 0 && diff < minDiff) {
+            minDiff = diff
+            nearestIndex = i
+          }
+        }
+
+        buyDateIndex = exactIndex >= 0 ? exactIndex : nearestIndex
+        if (buyDateIndex >= 0) {
+          const finalBuyPrice = buyPrice || values[buyDateIndex][1]
+          buyPoint = {
+            name: '买入',
+            coord: [categoryData[buyDateIndex], finalBuyPrice],
+            value: finalBuyPrice.toFixed ? finalBuyPrice.toFixed(2) : finalBuyPrice,
+            itemStyle: {
+              color: '#F59E0B'
             }
-            if (dayObj.getTime() >= buyDateObj.getTime()) {
-              buyDateIndex = i
-              const finalBuyPrice = buyPrice || values[i][1]
-              buyPoint = {
-                name: '买入',
-                coord: [day, finalBuyPrice],
-                value: finalBuyPrice.toFixed ? finalBuyPrice.toFixed(2) : finalBuyPrice,
-                itemStyle: {
-                  color: '#F59E0B'
-                }
-              }
-              if (!buyPrice) {
-                buyPrice = values[i][1]
-              }
-              break
-            }
+          }
+          if (!buyPrice) {
+            buyPrice = values[buyDateIndex][1]
           }
         }
       }
@@ -3642,18 +3932,13 @@ function calculateTarget() {
             </template>
             <template #footer>
               <n-flex justify="center" vertical>
-                <n-flex justify="center">
-                  <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
-                  <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                  <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
-                    {{
-                      "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
-                    }}
+                <n-flex justify="center" v-if="getHoldingVolume(result) > 0" style="margin-top: 4px;">
+                  <n-tag size="small" type="warning" :bordered="false">
+                    持仓 {{ getHoldingVolume(result) }} 股
                   </n-tag>
-                </n-flex>
-                <n-flex justify="center" v-if="result.buyDate">
-                  <n-text size="small" type="info">买入日期: {{ new Date(result.buyDate).toLocaleDateString('zh-CN') }}</n-text>
-                  <n-text size="small" type="info" v-if="result.holdingDays >= 0">持有天数: {{ result.holdingDays }}天</n-text>
+                  <n-tag size="small" type="info" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
+                    均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }}
+                  </n-tag>
                 </n-flex>
               </n-flex>
             </template>
@@ -3668,6 +3953,12 @@ function calculateTarget() {
                 <n-button size="tiny" type="error" @click="showMonthK(result['股票代码'],result['股票名称'])"> 月K</n-button>
                 <n-button size="tiny" v-if="data.openAiEnable" type="warning" secondary
                           @click="aiCheckStock(result['股票名称'],result['股票代码'])"> AI分析
+                </n-button>
+                <n-button size="tiny" type="success"
+                          @click="openTradeRecordModal('buy', result)"> 买入
+                </n-button>
+                <n-button size="tiny" type="warning"
+                          @click="openTradeRecordModal('sell', result)"> 卖出
                 </n-button>
                 <!-- 其他功能：下拉菜单 -->
                 <n-dropdown trigger="click" :options="getMoreOptions(result)" @select="(key) => handleMoreAction(key, result)">
@@ -3736,16 +4027,16 @@ function calculateTarget() {
               <!-- 成本信息 -->
               <n-gi :span="4" v-if="result.costPrice>0 || result.volume>0">
                 <n-flex vertical>
-                  <n-tag v-if="result.volume>0" size="small" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                  <n-tag v-if="result.costPrice>0" size="small" :type="result.profitType">
-                    {{ "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" }}
+                  <n-tag v-if="getHoldingVolume(result)>0" size="small" :type="getHoldingProfitType(result)">{{ getHoldingVolume(result) + "股" }}</n-tag>
+                  <n-tag v-if="getHoldingCostPrice(result)>0" size="small" :type="getHoldingProfitType(result)">
+                    {{ "成本:" + formatHoldingNumber(getHoldingCostPrice(result)) + "*" + getHoldingVolume(result) + " " + formatHoldingNumber(getHoldingProfitPercent(result)) + "%" }}
                   </n-tag>
-                  <n-text v-if="result.costVolume>0" size="small" :type="result.type">
+                  <n-text v-if="getHoldingVolume(result)>0" size="small" :type="result.type">
                     盈亏: <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
                   </n-text>
-                  <n-text v-if="result.buyDate" size="small" type="info">
-                    买入: {{ new Date(result.buyDate).toLocaleDateString('zh-CN') }}
-                    <span v-if="result.holdingDays >= 0"> ({{ result.holdingDays }}天)</span>
+                  <n-text v-if="getHoldingVolume(result) > 0" size="small" type="info">
+                    持仓: {{ getHoldingVolume(result) }}股
+                    <span v-if="getHoldingCostPrice(result) > 0"> (均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }})</span>
                   </n-text>
                 </n-flex>
               </n-gi>
@@ -3760,6 +4051,8 @@ function calculateTarget() {
                 <n-flex justify="end" wrap>
                   <n-button size="tiny" type="error" @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)">分时</n-button>
                   <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])">日K</n-button>
+                  <n-button size="tiny" type="success" @click="openTradeRecordModal('buy', result)">买入</n-button>
+                  <n-button size="tiny" type="warning" @click="openTradeRecordModal('sell', result)">卖出</n-button>
                   <n-button size="tiny" secondary type="primary" @click="removeMonitor(result['股票代码'],result['股票名称'],result.key)">取消关注</n-button>
                   <n-button size="tiny" v-if="data.openAiEnable" secondary type="warning" @click="aiCheckStock(result['股票名称'],result['股票代码'])">AI分析</n-button>
                   <n-dropdown trigger="click" :options="getMoreOptions(result)" @select="(key) => handleMoreAction(key, result)">
@@ -3878,16 +4171,18 @@ function calculateTarget() {
               <n-flex justify="center" vertical>
                 <n-flex justify="center">
                   <n-text :type="'info'">{{ result["日期"] + " " + result["时间"] }}</n-text>
-                  <n-tag size="small" v-if="result.volume>0" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                  <n-tag size="small" v-if="result.costPrice>0" :type="result.profitType">
+                  <n-tag size="small" v-if="getHoldingVolume(result)>0" :type="getHoldingProfitType(result)">{{ getHoldingVolume(result) + "股" }}</n-tag>
+                  <n-tag size="small" v-if="getHoldingCostPrice(result)>0" :type="getHoldingProfitType(result)">
                     {{
-                      "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" + " ( " + result.profitAmount + " ¥ )"
+                      "成本:" + formatHoldingNumber(getHoldingCostPrice(result)) + "*" + getHoldingVolume(result) + " " + formatHoldingNumber(getHoldingProfitPercent(result)) + "%" + " ( " + formatHoldingNumber(getHoldingProfitAmount(result)) + " ¥ )"
                     }}
                   </n-tag>
                 </n-flex>
-                <n-flex justify="center" v-if="result.buyDate">
-                  <n-text size="small" type="info">买入日期: {{ new Date(result.buyDate).toLocaleDateString('zh-CN') }}</n-text>
-                  <n-text size="small" type="info" v-if="result.holdingDays >= 0">持有天数: {{ result.holdingDays }}天</n-text>
+                <n-flex justify="center" v-if="getHoldingVolume(result) > 0">
+                  <n-text size="small" type="info">持仓: {{ getHoldingVolume(result) }}股</n-text>
+                  <n-text size="small" type="info" v-if="getHoldingCostPrice(result) > 0">
+                    均价: {{ formatHoldingNumber(getHoldingCostPrice(result)) }}
+                  </n-text>
                 </n-flex>
               </n-flex>
             </template>
@@ -3902,6 +4197,12 @@ function calculateTarget() {
                 <n-button size="tiny" type="error" @click="showMonthK(result['股票代码'],result['股票名称'])"> 月K</n-button>
                 <n-button size="tiny" v-if="data.openAiEnable" type="warning" secondary
                           @click="aiCheckStock(result['股票名称'],result['股票代码'])"> AI分析
+                </n-button>
+                <n-button size="tiny" type="success"
+                          @click="openTradeRecordModal('buy', result)"> 买入
+                </n-button>
+                <n-button size="tiny" type="warning"
+                          @click="openTradeRecordModal('sell', result)"> 卖出
                 </n-button>
                 <!-- 其他功能：下拉菜单 -->
                 <n-dropdown trigger="click" :options="getMoreOptions(result)" @select="(key) => handleMoreAction(key, result)">
@@ -3970,11 +4271,11 @@ function calculateTarget() {
               <!-- 成本信息 -->
               <n-gi :span="4" v-if="result.costPrice>0 || result.volume>0">
                 <n-flex vertical>
-                  <n-tag v-if="result.volume>0" size="small" :type="result.profitType">{{ result.volume + "股" }}</n-tag>
-                  <n-tag v-if="result.costPrice>0" size="small" :type="result.profitType">
-                    {{ "成本:" + result.costPrice + "*" + result.costVolume + " " + result.profit + "%" }}
+                  <n-tag v-if="getHoldingVolume(result)>0" size="small" :type="getHoldingProfitType(result)">{{ getHoldingVolume(result) + "股" }}</n-tag>
+                  <n-tag v-if="getHoldingCostPrice(result)>0" size="small" :type="getHoldingProfitType(result)">
+                    {{ "成本:" + formatHoldingNumber(getHoldingCostPrice(result)) + "*" + getHoldingVolume(result) + " " + formatHoldingNumber(getHoldingProfitPercent(result)) + "%" }}
                   </n-tag>
-                  <n-text v-if="result.costVolume>0" size="small" :type="result.type">
+                  <n-text v-if="getHoldingVolume(result)>0" size="small" :type="result.type">
                     盈亏: <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
                   </n-text>
                 </n-flex>
@@ -3990,6 +4291,8 @@ function calculateTarget() {
                 <n-flex justify="end" wrap>
                   <n-button size="tiny" type="error" @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)">分时</n-button>
                   <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])">日K</n-button>
+                  <n-button size="tiny" type="success" @click="openTradeRecordModal('buy', result)">买入</n-button>
+                  <n-button size="tiny" type="warning" @click="openTradeRecordModal('sell', result)">卖出</n-button>
                   <n-button size="tiny" secondary type="primary" @click="removeMonitor(result['股票代码'],result['股票名称'],result.key)">取消关注</n-button>
                   <n-button size="tiny" v-if="data.openAiEnable" secondary type="warning" @click="aiCheckStock(result['股票名称'],result['股票代码'])">AI分析</n-button>
                   <n-button secondary type="error" size="tiny" @click="delStockGroup(result['股票代码'],result['股票名称'],group.ID)">移出分组</n-button>
@@ -4089,6 +4392,39 @@ function calculateTarget() {
         保存
       </n-button>
     </template>
+  </n-modal>
+
+  <n-modal v-model:show="tradeRecordModal" preset="card"
+           :title="(tradeRecordStock.name || '') + (tradeRecordType === 'buy' ? ' 买入记录' : ' 卖出记录')"
+           style="width: 860px;">
+    <n-form label-placement="left" label-width="60px">
+      <n-grid :cols="4" :x-gap="8">
+        <n-form-item-gi label="日期">
+          <n-date-picker v-model:value="tradeRecordForm.date" type="date" clearable />
+        </n-form-item-gi>
+        <n-form-item-gi label="价格">
+          <n-input-number v-model:value="tradeRecordForm.price" min="0" placeholder="价格" />
+        </n-form-item-gi>
+        <n-form-item-gi label="数量">
+          <n-input-number v-model:value="tradeRecordForm.volume" min="0" step="100" placeholder="数量" />
+        </n-form-item-gi>
+        <n-form-item-gi label="备注">
+          <n-input v-model:value="tradeRecordForm.note" placeholder="备注" />
+        </n-form-item-gi>
+      </n-grid>
+    </n-form>
+    <n-flex justify="end" style="margin: 8px 0;">
+      <n-button type="primary" @click="addTradeRecord">
+        {{ (editingTradeRecord.id && editingTradeRecord.type === tradeRecordType)
+          ? '更新' + (tradeRecordType === 'buy' ? '买入' : '卖出')
+          : '新增' + (tradeRecordType === 'buy' ? '买入' : '卖出') }}
+      </n-button>
+    </n-flex>
+    <n-text strong>买入记录</n-text>
+    <n-data-table :columns="tradeRecordColumns('buy')" :data="currentTradeRecords.buys" size="small" :max-height="200" />
+    <div style="height: 12px;"></div>
+    <n-text strong>卖出记录</n-text>
+    <n-data-table :columns="tradeRecordColumns('sell')" :data="currentTradeRecords.sells" size="small" :max-height="200" />
   </n-modal>
 
   <n-modal v-model:show="addTabPane" title="添加分组" style="width: 400px;text-align: left" :preset="'card'">
