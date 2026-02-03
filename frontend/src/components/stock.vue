@@ -2231,6 +2231,9 @@ function showMoney(code, name) {
 function showK(code, name) {
   data.code = code
   data.name = name
+  tradeRecordStock.code = code
+  tradeRecordStock.name = name
+  ensureTradeRecordBucket(code)
   data.kURL = 'http://image.sinajs.cn/newchart/daily/n/' + data.code + '.gif' + "?t=" + Date.now()
   if (code.startsWith('hk')) {
     data.kURL = 'http://image.sinajs.cn/newchart/hk_stock/daily/' + data.code.replace("hk", "") + '.gif' + "?t=" + Date.now()
@@ -2246,6 +2249,9 @@ function showK(code, name) {
 function showWeekK(code, name) {
   data.code = code
   data.name = name
+  tradeRecordStock.code = code
+  tradeRecordStock.name = name
+  ensureTradeRecordBucket(code)
   data.kURL = 'http://image.sinajs.cn/newchart/weekly/n/' + data.code + '.gif' + "?t=" + Date.now()
   if (code.startsWith('hk')) {
     data.kURL = 'http://image.sinajs.cn/newchart/hk_stock/weekly/' + data.code.replace("hk", "") + '.gif' + "?t=" + Date.now()
@@ -2259,6 +2265,9 @@ function showWeekK(code, name) {
 function showMonthK(code, name) {
   data.code = code
   data.name = name
+  tradeRecordStock.code = code
+  tradeRecordStock.name = name
+  ensureTradeRecordBucket(code)
   data.kURL = 'http://image.sinajs.cn/newchart/monthly/n/' + data.code + '.gif' + "?t=" + Date.now()
   if (code.startsWith('hk')) {
     data.kURL = 'http://image.sinajs.cn/newchart/hk_stock/monthly/' + data.code.replace("hk", "") + '.gif' + "?t=" + Date.now()
@@ -4463,40 +4472,13 @@ function calculateTarget() {
            @after-enter="handleKLine">
     <!--    <n-image :src="data.kURL" />-->
     <div ref="kLineChartRef" style="width: 1000px; height: 500px;"></div>
-    <!-- K线数据表格 -->
-    <n-data-table
-      v-if="kLineTableData.length > 0"
-      :columns="[
-        { title: '日期', key: 'date', width: 120 },
-        { title: '开盘', key: 'open', width: 100 },
-        { title: '收盘', key: 'close', width: 100 },
-        { title: '最高', key: 'high', width: 100 },
-        { title: '最低', key: 'low', width: 100 },
-        { title: '成交量(万手)', key: 'volume', width: 120 },
-        { 
-          title: '买入价格', 
-          key: 'buyPrice', 
-          width: 100,
-          render: (row) => {
-            if (row.isBuyDate && row.buyPrice) {
-              return h(NTag, { type: 'warning', size: 'small' }, { default: () => row.buyPrice.toFixed(2) })
-            }
-            return h('span', '-')
-          }
-        }
-      ]"
-      :data="kLineTableData"
-      :max-height="300"
-      :row-props="(row) => ({
-        style: row.isBuyDate ? { backgroundColor: 'rgba(245, 158, 11, 0.2)' } : {}
-      })"
-      size="small"
-      striped
-    >
-      <template #empty>
-        <n-empty description="暂无数据" />
-      </template>
-    </n-data-table>
+    <div style="margin-top: 12px;">
+      <n-text strong>买入记录</n-text>
+      <n-data-table :columns="tradeRecordColumns('buy')" :data="currentTradeRecords.buys" size="small" :max-height="200" />
+      <div style="height: 12px;"></div>
+      <n-text strong>卖出记录</n-text>
+      <n-data-table :columns="tradeRecordColumns('sell')" :data="currentTradeRecords.sells" size="small" :max-height="200" />
+    </div>
   </n-modal>
 
   <n-modal transform-origin="center" v-model:show="modalShow4" preset="card" style="width: 800px;"
