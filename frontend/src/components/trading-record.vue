@@ -62,6 +62,10 @@ const limitDownStocksLoading = ref(false);
 const showLimitStocksModal = ref(false);
 const limitStocksType = ref("U"); // U涨停 D跌停 Z炸板
 
+// 记录详情弹窗
+const showDetailModal = ref(false);
+const detailRecord = ref(null);
+
 // AI总结相关状态
 const aiSummaryModal = ref(false);
 const aiSummary = ref("");
@@ -85,6 +89,11 @@ const filteredLimitUpSectors = computed(() => {
   return limitUpSectors.value
     .filter(sector => sector.stockCount > 3)
     .sort((a, b) => b.stockCount - a.stockCount);
+});
+
+// 仅用于顶部展示：取涨停板块前三
+const topLimitUpSectors = computed(() => {
+  return filteredLimitUpSectors.value.slice(0, 3);
 });
 
 // 计算属性：只显示跌停数大于3的板块，并按跌停数降序排序
@@ -123,12 +132,18 @@ const columns = [
       return h("div", {style: "display: flex; gap: 8px;"}, [
         h(NButton, {
           size: "small",
-          onClick: () => editRecord(row)
+          onClick: (e) => {
+            e.stopPropagation();
+            editRecord(row);
+          }
         }, {default: () => "编辑"}),
         h(NButton, {
           size: "small",
           type: "error",
-          onClick: () => deleteRecord(row.id)
+          onClick: (e) => {
+            e.stopPropagation();
+            deleteRecord(row.id);
+          }
         }, {default: () => "删除"})
       ]);
     }
@@ -398,9 +413,15 @@ function showLimitStocks(type) {
   // loadLimitStocksFromTushare(dateStr);
 }
 
+function openDetail(record) {
+  detailRecord.value = record;
+  showDetailModal.value = true;
+}
+
 function editRecord(record) {
   editingRecord.value = record;
   formData.tradeDate = record.tradeDate;
+  tradeDate.value = record.tradeDate;
   formData.summary = record.summary || "";
   formData.review = record.review || "";
   formData.limitUpSectors = record.limitUpSectors || "";
@@ -564,12 +585,12 @@ function handleDateChange(value) {
       <n-grid :cols="2" :x-gap="16" style="margin-bottom: 16px;">
         <!-- 左侧：涨停板块 -->
         <n-grid-item>
-          <n-card v-if="filteredLimitUpSectors.length > 0" title="涨停板块（涨停数>3）" size="small">
+          <n-card v-if="topLimitUpSectors.length > 0" title="涨停板块（涨停数>3）" size="small">
             <template #header-extra>
               <n-button size="small" type="error" @click="showLimitStocks('U')">查看涨停股票</n-button>
             </template>
             <n-grid :cols="1" :y-gap="8">
-              <n-grid-item v-for="sector in filteredLimitUpSectors" :key="sector.sectorName">
+              <n-grid-item v-for="sector in topLimitUpSectors" :key="sector.sectorName">
                 <n-card size="small" hoverable style="cursor: pointer;">
                   <template #header>
                     <n-tag type="error" size="small">{{ sector.sectorName }}</n-tag>
@@ -639,6 +660,7 @@ function handleDateChange(value) {
         :columns="columns"
         :data="records"
         :loading="loading"
+        :row-props="(row) => ({ style: 'cursor: pointer;', onClick: () => openDetail(row) })"
         :pagination="{
           page: page,
           pageSize: pageSize,
@@ -650,6 +672,22 @@ function handleDateChange(value) {
         }"
       />
     </n-card>
+
+    <!-- 记录详情弹窗 -->
+    <n-modal v-model:show="showDetailModal" preset="card" title="记录详情" style="width: 720px;">
+      <n-card size="small">
+        <n-text strong>日期：</n-text>
+        <n-text>{{ detailRecord?.tradeDate || "-" }}</n-text>
+        <div style="margin-top: 8px;">
+          <n-text strong>标题：</n-text>
+          <n-text>{{ detailRecord?.summary || "-" }}</n-text>
+        </div>
+        <div style="margin-top: 8px;">
+          <n-text strong>内容：</n-text>
+          <n-text style="white-space: pre-wrap;">{{ detailRecord?.review || "-" }}</n-text>
+        </div>
+      </n-card>
+    </n-modal>
 
     <!-- 编辑/新建模态框 -->
     <n-modal

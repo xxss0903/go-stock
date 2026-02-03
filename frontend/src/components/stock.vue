@@ -111,6 +111,7 @@ const downColor = '#00da3c';
 const downBorderColor = '';
 const kLineChartRef = ref(null);
 const kLineChartRef2 = ref(null);
+const kLineTableData = ref([]); // K线表格数据
 
 
 const handleProgress = (progress) => {
@@ -1559,11 +1560,16 @@ function handleKLine() {
 
     // 计算买入点（使用自选里录入的买入日期和成本价）
     let buyPoint = null
+    let buyDateStr = null
+    let buyPrice = null
+    let buyDateIndex = -1
     if (followList.value && followList.value.length > 0) {
       const follow = followList.value.find(item => item.StockCode === data.code)
       if (follow && follow.BuyDate) {
         const buyDateObj = new Date(follow.BuyDate)
         if (!isNaN(buyDateObj.getTime())) {
+          buyDateStr = follow.BuyDate
+          buyPrice = follow.CostPrice > 0 ? follow.CostPrice : null
           // 在K线日期中找到买入日期之后的第一个交易日
           for (let i = 0; i < categoryData.length; i++) {
             const day = categoryData[i]
@@ -1572,14 +1578,18 @@ function handleKLine() {
               continue
             }
             if (dayObj.getTime() >= buyDateObj.getTime()) {
-              const buyPrice = follow.CostPrice > 0 ? follow.CostPrice : values[i][1]
+              buyDateIndex = i
+              const finalBuyPrice = buyPrice || values[i][1]
               buyPoint = {
                 name: '买入',
-                coord: [day, buyPrice],
-                value: buyPrice.toFixed ? buyPrice.toFixed(2) : buyPrice,
+                coord: [day, finalBuyPrice],
+                value: finalBuyPrice.toFixed ? finalBuyPrice.toFixed(2) : finalBuyPrice,
                 itemStyle: {
                   color: '#F59E0B'
                 }
+              }
+              if (!buyPrice) {
+                buyPrice = values[i][1]
               }
               break
             }
@@ -1649,6 +1659,15 @@ function handleKLine() {
           let ma30 = params[4].data;//ma30的值
           params = params[0];//开盘收盘最低最高数据汇总
           let currentItemData = params.data;
+          
+          // 检查当前日期是否是买入日期
+          let buyInfo = ''
+          if (buyDateStr && params.name && buyDateIndex >= 0) {
+            const currentIndex = categoryData.indexOf(params.name)
+            if (currentIndex === buyDateIndex) {
+              buyInfo = '<br><span style="color: #F59E0B; font-weight: bold;">💰 买入价格: ' + (buyPrice ? buyPrice.toFixed(2) : currentItemData[2]) + '</span>'
+            }
+          }
 
           return params.name + '<br>' +
             '开盘:' + currentItemData[1] + '<br>' +
@@ -1659,7 +1678,7 @@ function handleKLine() {
             'MA5日均线:' + ma5 + '<br>' +
             'MA10日均线:' + ma10 + '<br>' +
             'MA20日均线:' + ma20 + '<br>' +
-            'MA30日均线:' + ma30
+            'MA30日均线:' + ma30 + buyInfo
         }
         // position: function (pos, params, el, elRect, size) {
         //   const obj = {
@@ -1895,6 +1914,21 @@ function handleKLine() {
     chart.on('click', {seriesName: '日K'}, function (params) {
       //console.log("click:",params);
     });
+    
+    // 保存K线数据用于表格显示
+    kLineTableData.value = result.map((item, index) => {
+      const isBuyDate = buyDateIndex >= 0 && index === buyDateIndex
+      return {
+        date: item.day,
+        open: item.open,
+        close: item.close,
+        high: item.high,
+        low: item.low,
+        volume: (item.volume / 10000).toFixed(2),
+        isBuyDate: isBuyDate,
+        buyPrice: isBuyDate && buyPrice ? buyPrice : null
+      }
+    })
   })
 }
 
@@ -4093,6 +4127,40 @@ function calculateTarget() {
            @after-enter="handleKLine">
     <!--    <n-image :src="data.kURL" />-->
     <div ref="kLineChartRef" style="width: 1000px; height: 500px;"></div>
+    <!-- K线数据表格 -->
+    <n-data-table
+      v-if="kLineTableData.length > 0"
+      :columns="[
+        { title: '日期', key: 'date', width: 120 },
+        { title: '开盘', key: 'open', width: 100 },
+        { title: '收盘', key: 'close', width: 100 },
+        { title: '最高', key: 'high', width: 100 },
+        { title: '最低', key: 'low', width: 100 },
+        { title: '成交量(万手)', key: 'volume', width: 120 },
+        { 
+          title: '买入价格', 
+          key: 'buyPrice', 
+          width: 100,
+          render: (row) => {
+            if (row.isBuyDate && row.buyPrice) {
+              return h(NTag, { type: 'warning', size: 'small' }, { default: () => row.buyPrice.toFixed(2) })
+            }
+            return h('span', '-')
+          }
+        }
+      ]"
+      :data="kLineTableData"
+      :max-height="300"
+      :row-props="(row) => ({
+        style: row.isBuyDate ? { backgroundColor: 'rgba(245, 158, 11, 0.2)' } : {}
+      })"
+      size="small"
+      striped
+    >
+      <template #empty>
+        <n-empty description="暂无数据" />
+      </template>
+    </n-data-table>
   </n-modal>
 
   <n-modal transform-origin="center" v-model:show="modalShow4" preset="card" style="width: 800px;"
