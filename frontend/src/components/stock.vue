@@ -1688,6 +1688,56 @@ const currentTradeRecords = computed(() => {
   return tradeRecords.value[code] || { buys: [], sells: [] }
 })
 
+const combinedTradeRecords = computed(() => {
+  const {buys, sells} = currentTradeRecords.value
+  const list = [
+    ...buys.map(item => ({...item, type: 'buy'})),
+    ...sells.map(item => ({...item, type: 'sell'}))
+  ]
+  return list.sort((a, b) => {
+    const dateDiff = (b.date || '').localeCompare(a.date || '')
+    if (dateDiff !== 0) return dateDiff
+    return (b.id || 0) - (a.id || 0)
+  })
+})
+
+const tradeRecordChartColumns = [
+  {
+    title: '类型',
+    key: 'type',
+    width: 80,
+    render: (row) => h(NTag, {
+      size: 'small',
+      type: row.type === 'buy' ? 'warning' : 'info'
+    }, {default: () => row.type === 'buy' ? '买入' : '卖出'})
+  },
+  { title: '日期', key: 'date', width: 120 },
+  {
+    title: '价格',
+    key: 'price',
+    width: 100,
+    render: (row) => row.price ? row.price.toFixed(2) : '-'
+  },
+  { title: '数量', key: 'volume', width: 100 },
+  { title: '备注', key: 'note' },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 120,
+    render: (row) => h('div', {style: 'display: flex; gap: 6px;'}, [
+      h(NButton, {
+        size: 'small',
+        onClick: () => editTradeRecord(row.type, row)
+      }, {default: () => '编辑'}),
+      h(NButton, {
+        size: 'small',
+        type: 'error',
+        onClick: () => deleteTradeRecord(row.type, row)
+      }, {default: () => '删除'})
+    ])
+  }
+]
+
 function ensureTradeRecordBucket(code) {
   if (!code) return
   if (!tradeRecords.value[code]) {
@@ -4473,11 +4523,8 @@ function calculateTarget() {
     <!--    <n-image :src="data.kURL" />-->
     <div ref="kLineChartRef" style="width: 1000px; height: 500px;"></div>
     <div style="margin-top: 12px;">
-      <n-text strong>买入记录</n-text>
-      <n-data-table :columns="tradeRecordColumns('buy')" :data="currentTradeRecords.buys" size="small" :max-height="200" />
-      <div style="height: 12px;"></div>
-      <n-text strong>卖出记录</n-text>
-      <n-data-table :columns="tradeRecordColumns('sell')" :data="currentTradeRecords.sells" size="small" :max-height="200" />
+      <n-text strong>买卖记录</n-text>
+      <n-data-table :columns="tradeRecordChartColumns" :data="combinedTradeRecords" size="small" :max-height="260" />
     </div>
   </n-modal>
 
