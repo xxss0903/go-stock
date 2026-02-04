@@ -4083,19 +4083,22 @@ function calculateTarget() {
                 </n-flex>
               </n-gi>
               
-              <!-- 成本信息 -->
-              <n-gi :span="4" v-if="result.costPrice>0 || result.volume>0">
+              <!-- 持仓信息 -->
+              <n-gi :span="4" v-if="getHoldingVolume(result) > 0 || getHoldingCostPrice(result) > 0">
                 <n-flex vertical>
-                  <n-tag v-if="getHoldingVolume(result)>0" size="small" :type="getHoldingProfitType(result)">{{ getHoldingVolume(result) + "股" }}</n-tag>
-                  <n-tag v-if="getHoldingCostPrice(result)>0" size="small" :type="getHoldingProfitType(result)">
-                    {{ "成本:" + formatHoldingNumber(getHoldingCostPrice(result)) + "*" + getHoldingVolume(result) + " " + formatHoldingNumber(getHoldingProfitPercent(result)) + "%" }}
-                  </n-tag>
-                  <n-text v-if="getHoldingVolume(result)>0" size="small" :type="result.type">
-                    盈亏: <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
-                  </n-text>
-                  <n-text v-if="getHoldingVolume(result) > 0" size="small" type="info">
-                    持仓: {{ getHoldingVolume(result) }}股
-                    <span v-if="getHoldingCostPrice(result) > 0"> (均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }})</span>
+                  <n-space size="small" wrap>
+                    <n-tag size="small" type="warning" :bordered="false" v-if="getHoldingVolume(result) > 0">
+                      持仓 {{ getHoldingVolume(result) }}股
+                    </n-tag>
+                    <n-tag size="small" type="info" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
+                      均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }}
+                    </n-tag>
+                    <n-tag size="small" :type="getHoldingProfitType(result)" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
+                      盈亏 {{ formatHoldingNumber(getHoldingProfitPercent(result)) }}%
+                    </n-tag>
+                  </n-space>
+                  <n-text v-if="getHoldingCostPrice(result) > 0" size="small" :type="getHoldingProfitType(result)">
+                    {{ formatHoldingNumber(getHoldingProfitAmount(result)) }} ¥
                   </n-text>
                 </n-flex>
               </n-gi>
@@ -4107,11 +4110,11 @@ function calculateTarget() {
               
               <!-- 操作按钮 -->
               <n-gi :span="4">
-                <n-flex justify="end" wrap>
-                  <n-button size="tiny" type="error" @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)">分时</n-button>
-                  <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])">日K</n-button>
+                <n-flex justify="end" wrap gap="6">
                   <n-button size="tiny" type="success" @click="openTradeRecordModal('buy', result)">买入</n-button>
                   <n-button size="tiny" type="warning" @click="openTradeRecordModal('sell', result)">卖出</n-button>
+                  <n-button size="tiny" type="error" secondary @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)">分时</n-button>
+                  <n-button size="tiny" type="error" secondary @click="showK(result['股票代码'],result['股票名称'])">日K</n-button>
                   <n-button size="tiny" secondary type="primary" @click="removeMonitor(result['股票代码'],result['股票名称'],result.key)">取消关注</n-button>
                   <n-button size="tiny" v-if="data.openAiEnable" secondary type="warning" @click="aiCheckStock(result['股票名称'],result['股票代码'])">AI分析</n-button>
                   <n-dropdown trigger="click" :options="getMoreOptions(result)" @select="(key) => handleMoreAction(key, result)">
@@ -4327,15 +4330,22 @@ function calculateTarget() {
                 </n-flex>
               </n-gi>
               
-              <!-- 成本信息 -->
-              <n-gi :span="4" v-if="result.costPrice>0 || result.volume>0">
+              <!-- 持仓信息 -->
+              <n-gi :span="4" v-if="getHoldingVolume(result) > 0 || getHoldingCostPrice(result) > 0">
                 <n-flex vertical>
-                  <n-tag v-if="getHoldingVolume(result)>0" size="small" :type="getHoldingProfitType(result)">{{ getHoldingVolume(result) + "股" }}</n-tag>
-                  <n-tag v-if="getHoldingCostPrice(result)>0" size="small" :type="getHoldingProfitType(result)">
-                    {{ "成本:" + formatHoldingNumber(getHoldingCostPrice(result)) + "*" + getHoldingVolume(result) + " " + formatHoldingNumber(getHoldingProfitPercent(result)) + "%" }}
-                  </n-tag>
-                  <n-text v-if="getHoldingVolume(result)>0" size="small" :type="result.type">
-                    盈亏: <n-number-animation :duration="1000" :precision="2" :from="0" :to="result.profitAmountToday"/>
+                  <n-space size="small" wrap>
+                    <n-tag size="small" type="warning" :bordered="false" v-if="getHoldingVolume(result) > 0">
+                      持仓 {{ getHoldingVolume(result) }}股
+                    </n-tag>
+                    <n-tag size="small" type="info" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
+                      均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }}
+                    </n-tag>
+                    <n-tag size="small" :type="getHoldingProfitType(result)" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
+                      盈亏 {{ formatHoldingNumber(getHoldingProfitPercent(result)) }}%
+                    </n-tag>
+                  </n-space>
+                  <n-text v-if="getHoldingCostPrice(result) > 0" size="small" :type="getHoldingProfitType(result)">
+                    {{ formatHoldingNumber(getHoldingProfitAmount(result)) }} ¥
                   </n-text>
                 </n-flex>
               </n-gi>
@@ -4347,11 +4357,11 @@ function calculateTarget() {
               
               <!-- 操作按钮 -->
               <n-gi :span="4">
-                <n-flex justify="end" wrap>
-                  <n-button size="tiny" type="error" @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)">分时</n-button>
-                  <n-button size="tiny" type="error" @click="showK(result['股票代码'],result['股票名称'])">日K</n-button>
+                <n-flex justify="end" wrap gap="6">
                   <n-button size="tiny" type="success" @click="openTradeRecordModal('buy', result)">买入</n-button>
                   <n-button size="tiny" type="warning" @click="openTradeRecordModal('sell', result)">卖出</n-button>
+                  <n-button size="tiny" type="error" secondary @click="showFenshi(result['股票代码'],result['股票名称'],result.changePercent)">分时</n-button>
+                  <n-button size="tiny" type="error" secondary @click="showK(result['股票代码'],result['股票名称'])">日K</n-button>
                   <n-button size="tiny" secondary type="primary" @click="removeMonitor(result['股票代码'],result['股票名称'],result.key)">取消关注</n-button>
                   <n-button size="tiny" v-if="data.openAiEnable" secondary type="warning" @click="aiCheckStock(result['股票名称'],result['股票代码'])">AI分析</n-button>
                   <n-button secondary type="error" size="tiny" @click="delStockGroup(result['股票代码'],result['股票名称'],group.ID)">移出分组</n-button>
