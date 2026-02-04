@@ -1896,15 +1896,15 @@ function handleKLine() {
         const buyDateKey = normalizeDateKey(follow.BuyDate)
         const buyDateObj = parseDateKey(buyDateKey)
         if (!buyDateObj) return
-        buyDateStr = follow.BuyDate
-        buyPrice = follow.CostPrice > 0 ? follow.CostPrice : null
+          buyDateStr = follow.BuyDate
+          buyPrice = follow.CostPrice > 0 ? follow.CostPrice : null
 
         let exactIndex = -1
         let nearestIndex = -1
         let minDiff = Number.MAX_SAFE_INTEGER
         // 在K线日期中找到买入日期或之后的第一个交易日（兼容 YYYYMMDD / YYYY-MM-DD）
-        for (let i = 0; i < categoryData.length; i++) {
-          const day = categoryData[i]
+          for (let i = 0; i < categoryData.length; i++) {
+            const day = categoryData[i]
           const dayKey = normalizeDateKey(day)
           if (!dayKey) continue
           if (dayKey === buyDateKey) {
@@ -1923,15 +1923,15 @@ function handleKLine() {
         buyDateIndex = exactIndex >= 0 ? exactIndex : nearestIndex
         if (buyDateIndex >= 0) {
           const finalBuyPrice = buyPrice || values[buyDateIndex][1]
-          buyPoint = {
-            name: '买入',
+              buyPoint = {
+                name: '买入',
             coord: [categoryData[buyDateIndex], finalBuyPrice],
-            value: finalBuyPrice.toFixed ? finalBuyPrice.toFixed(2) : finalBuyPrice,
-            itemStyle: {
-              color: '#F59E0B'
-            }
-          }
-          if (!buyPrice) {
+                value: finalBuyPrice.toFixed ? finalBuyPrice.toFixed(2) : finalBuyPrice,
+                itemStyle: {
+                  color: '#F59E0B'
+                }
+              }
+              if (!buyPrice) {
             buyPrice = values[buyDateIndex][1]
           }
         }
@@ -4089,7 +4089,7 @@ function calculateTarget() {
                   <n-space size="small" wrap>
                     <n-tag size="small" type="warning" :bordered="false" v-if="getHoldingVolume(result) > 0">
                       持仓 {{ getHoldingVolume(result) }}股
-                    </n-tag>
+                  </n-tag>
                     <n-tag size="small" type="info" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
                       均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }}
                     </n-tag>
@@ -4336,7 +4336,7 @@ function calculateTarget() {
                   <n-space size="small" wrap>
                     <n-tag size="small" type="warning" :bordered="false" v-if="getHoldingVolume(result) > 0">
                       持仓 {{ getHoldingVolume(result) }}股
-                    </n-tag>
+                  </n-tag>
                     <n-tag size="small" type="info" :bordered="false" v-if="getHoldingCostPrice(result) > 0">
                       均价 {{ formatHoldingNumber(getHoldingCostPrice(result)) }}
                     </n-tag>

@@ -21,6 +21,7 @@ declare module 'vue' {
     IndustryResearchReportList: typeof import('./src/components/IndustryResearchReportList.vue')['default']
     InvestCalendarTimeLine: typeof import('./src/components/InvestCalendarTimeLine.vue')['default']
     KLineChart: typeof import('./src/components/KLineChart.vue')['default']
+    LeaderStock: typeof import('./src/components/leader-stock.vue')['default']
     Learning: typeof import('./src/components/learning.vue')['default']
     LongTigerRankList: typeof import('./src/components/LongTigerRankList.vue')['default']
     Market: typeof import('./src/components/market.vue')['default']

@@ -459,6 +459,26 @@ const menuOptions = ref([
             RouterLink,
             {
               to: {
+                name: 'leader-stock',
+                query: {
+                  name:"龙头板块",
+                },
+                onClick: () => {
+                  activeKey.value = 'leader-stock'
+                },
+              }
+            },
+            {default: () => '龙头板块'}
+        ),
+    key: 'leader-stock',
+    icon: renderIcon(Flame),
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
                 name: 'learning',
                 query: {
                   name:"学习",
